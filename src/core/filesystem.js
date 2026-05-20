@@ -30,8 +30,17 @@ const seed = () => ({
 function dir(name, children = {}) {
   return { type: "dir", name, createdAt: now(), modifiedAt: now(), children };
 }
-function file(name, content = "") {
-  return { type: "file", name, content, createdAt: now(), modifiedAt: now(), size: content.length };
+function file(name, content = "", opts = {}) {
+  return {
+    type: "file",
+    name,
+    content,
+    mime: opts.mime || "text/plain",
+    binary: !!opts.binary,
+    createdAt: now(),
+    modifiedAt: now(),
+    size: (content || "").length,
+  };
 }
 
 function ensureRoot() {
@@ -126,7 +135,7 @@ export const fs = {
     bus.emit("fs-change", { path, op: "mkdir" });
   },
 
-  touch(path, content = "") {
+  touch(path, content = "", opts = {}) {
     const p = getParent(this.root, path);
     if (!p) throw new Error(`touch: cannot create ${path}`);
     const { parent, name } = p;
@@ -139,21 +148,23 @@ export const fs = {
     } else {
       store.update(() => {
         const live = getParent(this.root, path).parent;
-        live.children[name] = file(name, content);
+        live.children[name] = file(name, content, opts);
         live.modifiedAt = now();
       });
     }
     bus.emit("fs-change", { path, op: "touch" });
   },
 
-  write(path, content) {
-    if (!this.exists(path)) return this.touch(path, content);
+  write(path, content, opts = {}) {
+    if (!this.exists(path)) return this.touch(path, content, opts);
     store.update(() => {
       const node = getNode(this.root, path);
       if (!node || node.type !== "file") return;
       node.content = content;
       node.size = (content || "").length;
       node.modifiedAt = now();
+      if (opts.mime) node.mime = opts.mime;
+      if ("binary" in opts) node.binary = !!opts.binary;
     });
     bus.emit("fs-change", { path, op: "write" });
   },

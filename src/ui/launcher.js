@@ -1,8 +1,10 @@
 import { registry } from "../core/app-registry.js";
 import { manager } from "../core/window-manager.js";
 import { bus } from "../core/event-bus.js";
+import { trapFocus } from "./focus-trap.js";
 
 let el, input, grid, activeIndex = 0, filtered = [];
+let releaseTrap = null;
 
 export function initLauncher() {
   el = document.getElementById("launcher");
@@ -80,9 +82,11 @@ function open() {
   activeIndex = 0;
   render();
   setTimeout(() => input.focus(), 30);
+  releaseTrap = trapFocus(el.querySelector(".launcher-panel"));
 }
 function close() {
   el.hidden = true;
+  releaseTrap?.(); releaseTrap = null;
 }
 function toggle() {
   if (el.hidden) open(); else close();

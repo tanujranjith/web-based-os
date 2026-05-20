@@ -54,6 +54,16 @@ export function installShortcuts() {
       bus.emit("launcher-toggle");
       return;
     }
+    if (mod && k === "k") {
+      e.preventDefault();
+      bus.emit("palette-toggle");
+      return;
+    }
+    if (mod && k === "l" && e.shiftKey) {
+      e.preventDefault();
+      bus.emit("lock");
+      return;
+    }
 
     // Alt+Tab — cycle through open windows
     if (e.altKey && k === "tab") {

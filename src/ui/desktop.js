@@ -3,6 +3,7 @@ import { manager } from "../core/window-manager.js";
 import { store } from "../core/state.js";
 import { bus } from "../core/event-bus.js";
 import { contextMenu } from "./context-menu.js";
+import { onLongPress } from "./focus-trap.js";
 import { fs } from "../core/filesystem.js";
 
 let iconsEl, widgetsEl;
@@ -15,10 +16,15 @@ export function initDesktop() {
   renderIcons();
   renderWidgets();
 
-  document.getElementById("desktop").addEventListener("contextmenu", onDesktopContext);
-  document.getElementById("desktop").addEventListener("click", (e) => {
+  const desktopEl = document.getElementById("desktop");
+  desktopEl.addEventListener("contextmenu", onDesktopContext);
+  desktopEl.addEventListener("click", (e) => {
     if (e.target.closest(".desktop-icon")) return;
     deselect();
+  });
+  // Long-press → context menu on touch
+  onLongPress(desktopEl, (x, y) => {
+    onDesktopContext({ preventDefault() {}, clientX: x, clientY: y, target: document.elementFromPoint(x, y) || desktopEl });
   });
 
   let lastShortcuts = store.get().desktopShortcuts.join(",");
@@ -124,9 +130,53 @@ function renderWidgets() {
   widgetsEl.innerHTML = "";
   widgetsEl.appendChild(timeWidget());
   widgetsEl.appendChild(statsWidget());
+  widgetsEl.appendChild(monitorWidget());
   widgetsEl.appendChild(quickNoteWidget());
   updateTimeWidget();
   updateStatsWidget();
+  startMonitor();
+}
+
+let monRAF, monLast = performance.now(), monFrames = 0, monFPS = 0, monStop = false;
+function startMonitor() {
+  monStop = false;
+  const loop = () => {
+    if (monStop) return;
+    monFrames++;
+    const now = performance.now();
+    if (now - monLast >= 500) {
+      monFPS = Math.round((monFrames * 1000) / (now - monLast));
+      monFrames = 0; monLast = now;
+      updateMonitor();
+    }
+    monRAF = requestAnimationFrame(loop);
+  };
+  monRAF = requestAnimationFrame(loop);
+}
+function updateMonitor() {
+  const fpsEl = document.getElementById("w-fps");
+  if (!fpsEl) return;
+  fpsEl.textContent = `${monFPS}`;
+  const heap = performance.memory?.usedJSHeapSize;
+  const heapEl = document.getElementById("w-heap");
+  if (heapEl) heapEl.textContent = heap ? `${(heap / 1024 / 1024).toFixed(1)} MB` : "—";
+  // Update simple FPS bar
+  const bar = document.getElementById("w-fps-bar");
+  if (bar) {
+    const w = Math.max(2, Math.min(100, monFPS * 1.6));
+    bar.style.width = w + "%";
+    bar.style.background = monFPS >= 50 ? "var(--accent)" : monFPS >= 30 ? "#ffb266" : "#ff8a8a";
+  }
+}
+function monitorWidget() {
+  const el = document.createElement("div");
+  el.className = "widget widget-monitor";
+  el.innerHTML = `<h3>Monitor</h3>
+    <div class="widget-row"><span>FPS</span><strong id="w-fps">—</strong></div>
+    <div class="widget-bar"><div id="w-fps-bar" style="width:0%"></div></div>
+    <div class="widget-row" style="margin-top:6px"><span>JS Heap</span><strong id="w-heap">—</strong></div>
+  `;
+  return el;
 }
 
 function timeWidget() {

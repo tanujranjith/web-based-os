@@ -57,8 +57,23 @@ export default {
     const openFile = (path) => {
       const node = fs.read(path);
       if (!node) return;
-      ctx.openApp("notes", { openFsFile: path });
-      bus.emit("notes-open-file", { path });
+      const mime = node.mime || "";
+      const ext = path.split(".").pop().toLowerCase();
+      if (mime.startsWith("image/") || ["png","jpg","jpeg","gif","webp","svg"].includes(ext)) {
+        ctx.openApp("image-viewer", { openFsFile: path });
+      } else if (mime === "application/pdf" || ext === "pdf") {
+        ctx.openApp("pdf-viewer", { openFsFile: path });
+      } else if (mime.startsWith("audio/") || ["mp3","wav","ogg","m4a","flac"].includes(ext)) {
+        ctx.openApp("music");
+      } else if (["js","ts","jsx","tsx","json","html","css","py","rs","go"].includes(ext)) {
+        ctx.openApp("code-editor", { openFsFile: path });
+        bus.emit("code-open-file", { path });
+      } else if (["md","markdown"].includes(ext)) {
+        ctx.openApp("markdown", { openFsFile: path });
+      } else {
+        ctx.openApp("notes", { openFsFile: path });
+        bus.emit("notes-open-file", { path });
+      }
     };
 
     const setSelected = (path) => {

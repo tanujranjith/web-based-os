@@ -3,15 +3,20 @@ import { manager } from "../core/window-manager.js";
 import { bus } from "../core/event-bus.js";
 import { store } from "../core/state.js";
 
-let pinnedEl, runningEl, timeEl, dateEl;
+let pinnedEl, runningEl, timeEl, dateEl, netEl, batEl;
 
 export function initDock() {
   pinnedEl = document.getElementById("dock-pinned");
   runningEl = document.getElementById("dock-running");
   timeEl = document.getElementById("tray-time");
   dateEl = document.getElementById("tray-date");
+  netEl = document.getElementById("tray-net");
+  batEl = document.getElementById("tray-battery");
 
   document.getElementById("tray-clock").addEventListener("click", () => manager.open("about"));
+
+  setupNetwork();
+  setupBattery();
 
   renderPinned();
   renderRunning();
@@ -95,6 +100,40 @@ function tickClock() {
   const now = new Date();
   timeEl.textContent = now.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
   dateEl.textContent = now.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+}
+
+function setupNetwork() {
+  const update = () => {
+    const online = navigator.onLine;
+    netEl.classList.toggle("online", online);
+    netEl.classList.toggle("offline", !online);
+    netEl.title = online ? "Online" : "Offline";
+    netEl.innerHTML = online
+      ? `<span class="ic" aria-hidden="true">●</span><span class="lbl">on</span>`
+      : `<span class="ic" aria-hidden="true">●</span><span class="lbl">off</span>`;
+  };
+  window.addEventListener("online", update);
+  window.addEventListener("offline", update);
+  update();
+}
+
+async function setupBattery() {
+  if (!navigator.getBattery) { batEl.hidden = true; return; }
+  try {
+    const b = await navigator.getBattery();
+    const render = () => {
+      const pct = Math.round((b.level || 0) * 100);
+      batEl.hidden = false;
+      batEl.classList.toggle("low", pct <= 20 && !b.charging);
+      batEl.classList.toggle("crit", pct <= 10 && !b.charging);
+      batEl.title = b.charging ? `Charging — ${pct}%` : `Battery — ${pct}%`;
+      const icon = b.charging ? "⚡" : pct > 80 ? "🔋" : pct > 40 ? "🔋" : "🪫";
+      batEl.innerHTML = `<span class="ic" aria-hidden="true">${icon}</span><span class="lbl">${pct}%</span>`;
+    };
+    b.addEventListener("levelchange", render);
+    b.addEventListener("chargingchange", render);
+    render();
+  } catch { batEl.hidden = true; }
 }
 
 function escape(s) { return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }

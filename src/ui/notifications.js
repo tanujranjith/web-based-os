@@ -1,5 +1,6 @@
 import { store } from "../core/state.js";
 import { bus } from "../core/event-bus.js";
+import { sound } from "../core/sound.js";
 
 let toastsEl;
 let ncListEl;
@@ -38,11 +39,14 @@ export function notify({ title, body, icon }) {
   showToast(t);
   if (ncEl && !ncEl.hidden) renderCenter();
   updateDot();
+  sound.notify();
 }
 
 function showToast(t) {
   const el = document.createElement("div");
   el.className = "toast";
+  el.setAttribute("role", "status");
+  el.setAttribute("aria-live", "polite");
   el.innerHTML = `<div class="t-title">${escape(t.title || "Notification")}</div>${t.body ? `<div class="t-body">${escape(t.body)}</div>` : ""}`;
   toastsEl.appendChild(el);
   setTimeout(() => {

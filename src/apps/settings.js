@@ -1,11 +1,15 @@
 import { store } from "../core/state.js";
 import { theme, wallpapers, accents } from "../core/theme.js";
 import { bus } from "../core/event-bus.js";
+import { profiles } from "../core/profiles.js";
+import { animatedWallpaper } from "../core/animated-wallpaper.js";
 
 const SECTIONS = [
   { id: "appearance", label: "Appearance", icon: "🎨" },
   { id: "dock", label: "Dock & Desktop", icon: "📌" },
+  { id: "sounds", label: "Sounds", icon: "🔊" },
   { id: "accessibility", label: "Accessibility", icon: "♿" },
+  { id: "profiles", label: "Users", icon: "👥" },
   { id: "account", label: "Profile", icon: "🙂" },
   { id: "system", label: "System", icon: "⚙" },
 ];
@@ -80,10 +84,88 @@ export default {
               `).join("")}
             </div>
           </div>
+
+          <div class="settings-row">
+            <div class="label"><div class="title">Animated particles</div><div class="desc">Mouse-reactive accent particles drift over the wallpaper.</div></div>
+            <div class="toggle ${prefs.animatedWallpaper ? "on" : ""}" data-toggle="animatedWallpaper" role="switch" aria-checked="${prefs.animatedWallpaper}"></div>
+          </div>
         `;
         root.querySelector("#theme-sel").addEventListener("change", (e) => theme.setTheme(e.target.value));
         root.querySelectorAll("[data-accent]").forEach((s) => s.addEventListener("click", () => { theme.setAccent(s.dataset.accent); render(); }));
         root.querySelectorAll("[data-wp]").forEach((s) => s.addEventListener("click", () => { theme.setWallpaper(s.dataset.wp); render(); }));
+        root.querySelectorAll("[data-toggle]").forEach((t) => {
+          t.addEventListener("click", () => {
+            const key = t.dataset.toggle;
+            if (key === "animatedWallpaper") {
+              store.update((s) => { s.prefs.animatedWallpaper = !s.prefs.animatedWallpaper; });
+              animatedWallpaper.apply();
+              render();
+            }
+          });
+        });
+        return root;
+      },
+
+      sounds: () => {
+        const root = document.createElement("div");
+        const prefs = store.get().prefs;
+        root.innerHTML = `
+          <h2>Sounds</h2>
+          <p class="pane-desc">Subtle UI sound effects.</p>
+          <div class="settings-row">
+            <div class="label"><div class="title">UI sounds</div><div class="desc">Tiny tones for open, close, notify.</div></div>
+            <div class="toggle ${prefs.sounds ? "on" : ""}" data-toggle="sounds" role="switch" aria-checked="${prefs.sounds}"></div>
+          </div>
+        `;
+        root.querySelector("[data-toggle]").addEventListener("click", () => {
+          store.update((s) => { s.prefs.sounds = !s.prefs.sounds; });
+          render();
+        });
+        return root;
+      },
+
+      profiles: () => {
+        const root = document.createElement("div");
+        const list = profiles.list();
+        const active = profiles.active();
+        root.innerHTML = `
+          <h2>Users</h2>
+          <p class="pane-desc">Multiple profiles with separate data and (optionally) a PIN.</p>
+          <div class="profiles-list">
+            ${list.map((p) => `
+              <div class="profile-row">
+                <div class="lock-avatar" style="width:40px;height:40px;font-size:22px">${escape(p.avatar)}</div>
+                <div style="flex:1">
+                  <div class="title">${escape(p.name)} ${p.id === active.id ? '<span class="pal-kind">Active</span>' : ""}</div>
+                  <div class="desc">${p.pin ? "🔒 PIN set" : "No PIN"}</div>
+                </div>
+                <button class="btn" data-pin="${p.id}">${p.pin ? "Change PIN" : "Set PIN"}</button>
+                ${p.id !== active.id ? `<button class="btn primary" data-switch="${p.id}">Switch</button>` : ""}
+                ${list.length > 1 ? `<button class="btn danger" data-del="${p.id}">Delete</button>` : ""}
+              </div>
+            `).join("")}
+          </div>
+          <div class="settings-row" style="margin-top:14px">
+            <button class="btn primary" id="new-profile">＋ Add user</button>
+            <button class="btn" id="lock-now">🔒 Lock screen now</button>
+          </div>
+        `;
+        root.querySelectorAll("[data-switch]").forEach((b) => b.addEventListener("click", () => profiles.switchTo(b.dataset.switch)));
+        root.querySelectorAll("[data-del]").forEach((b) => b.addEventListener("click", () => { if (confirm("Delete this user and their data?")) { profiles.remove(b.dataset.del); render(); } }));
+        root.querySelectorAll("[data-pin]").forEach((b) => b.addEventListener("click", () => {
+          const pin = prompt("Set a 4–8 digit PIN (leave blank to clear):");
+          if (pin === null) return;
+          profiles.setPin(b.dataset.pin, pin);
+          render();
+        }));
+        root.querySelector("#new-profile").addEventListener("click", () => {
+          const name = prompt("Name for the new user:", "Friend");
+          if (!name) return;
+          const avatar = prompt("Avatar emoji (optional):", "🙂") || "🙂";
+          profiles.create({ name, avatar });
+          render();
+        });
+        root.querySelector("#lock-now").addEventListener("click", () => bus.emit("lock"));
         return root;
       },
 
@@ -109,7 +191,7 @@ export default {
         `;
         root.querySelector("#dock-sel").addEventListener("change", (e) => theme.setDockStyle(e.target.value));
         root.querySelector("#reset-pins").addEventListener("click", () => {
-          store.update((s) => { s.desktopShortcuts = ["files", "notes", "browser", "terminal", "settings"]; });
+          store.update((s) => { s.desktopShortcuts = ["files", "notes", "code-editor", "browser", "terminal", "settings"]; });
           bus.emit("notify", { title: "Dock", body: "Pinned apps reset." });
         });
         return root;

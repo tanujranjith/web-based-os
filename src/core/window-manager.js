@@ -1,6 +1,7 @@
 import { store } from "./state.js";
 import { bus } from "./event-bus.js";
 import { registry } from "./app-registry.js";
+import { sound } from "./sound.js";
 
 let zCounter = 100;
 const windows = new Map();   // id -> { id, appId, el, app, instance, state }
@@ -136,10 +137,15 @@ function attachDrag(rec) {
     rec.el.style.left = nx + "px";
     rec.el.style.top = ny + "px";
 
-    // Snap preview detection
+    // Snap preview detection (corners take priority for quarter snaps)
     const SNAP = 24;
+    const CORNER = 60;
     let zone = null;
-    if (e.clientY <= SNAP) zone = "top";
+    if (e.clientY <= CORNER && e.clientX <= CORNER) zone = "tl";
+    else if (e.clientY <= CORNER && e.clientX >= window.innerWidth - CORNER) zone = "tr";
+    else if (e.clientY >= viewportBounds().h - CORNER && e.clientX <= CORNER) zone = "bl";
+    else if (e.clientY >= viewportBounds().h - CORNER && e.clientX >= window.innerWidth - CORNER) zone = "br";
+    else if (e.clientY <= SNAP) zone = "top";
     else if (e.clientX <= SNAP) zone = "left";
     else if (e.clientX >= window.innerWidth - SNAP) zone = "right";
     if (zone !== snapZone) {
@@ -207,9 +213,15 @@ function attachDrag(rec) {
 
 function snapRegion(zone) {
   const vp = viewportBounds();
-  if (zone === "top") return { x: 0, y: 0, w: vp.w, h: vp.h };
-  if (zone === "left") return { x: 0, y: 0, w: Math.round(vp.w / 2), h: vp.h };
-  if (zone === "right") return { x: Math.round(vp.w / 2), y: 0, w: Math.round(vp.w / 2), h: vp.h };
+  const hw = Math.round(vp.w / 2);
+  const hh = Math.round(vp.h / 2);
+  if (zone === "top")   return { x: 0,  y: 0,  w: vp.w, h: vp.h };
+  if (zone === "left")  return { x: 0,  y: 0,  w: hw,   h: vp.h };
+  if (zone === "right") return { x: hw, y: 0,  w: hw,   h: vp.h };
+  if (zone === "tl")    return { x: 0,  y: 0,  w: hw,   h: hh };
+  if (zone === "tr")    return { x: hw, y: 0,  w: hw,   h: hh };
+  if (zone === "bl")    return { x: 0,  y: hh, w: hw,   h: hh };
+  if (zone === "br")    return { x: hw, y: hh, w: hw,   h: hh };
   return { x: 0, y: 0, w: vp.w, h: vp.h };
 }
 
@@ -322,6 +334,7 @@ export const manager = {
     });
 
     setTimeout(() => el.classList.remove("opening"), 260);
+    sound.open();
     bus.emit("window-open", { appId });
     return rec;
   },
@@ -329,6 +342,7 @@ export const manager = {
   close(id) {
     const rec = windows.get(id);
     if (!rec) return;
+    sound.close();
     try { rec.instance?.unmount?.(); } catch (e) { console.error(e); }
     rec.el.classList.add("closing");
     setTimeout(() => {
@@ -342,10 +356,26 @@ export const manager = {
   minimize(id) {
     const rec = windows.get(id);
     if (!rec) return;
-    rec.el.classList.add("minimizing");
+    // FLIP-style: animate toward the dock icon for this app
+    const target = document.querySelector(`.dock-item[data-app="${rec.app.id}"]`);
+    if (target && !document.documentElement.dataset.reduceMotion?.match(/true/)) {
+      const src = rec.el.getBoundingClientRect();
+      const dst = target.getBoundingClientRect();
+      const sx = (dst.width / src.width);
+      const sy = (dst.height / src.height);
+      const tx = (dst.left + dst.width / 2) - (src.left + src.width / 2);
+      const ty = (dst.top + dst.height / 2) - (src.top + src.height / 2);
+      rec.el.style.transformOrigin = "center";
+      rec.el.animate(
+        [
+          { transform: "none", opacity: 1 },
+          { transform: `translate(${tx}px, ${ty}px) scale(${sx}, ${sy})`, opacity: 0.2 },
+        ],
+        { duration: 260, easing: "cubic-bezier(0.55, 0, 0.85, 0.6)" }
+      );
+    }
     setTimeout(() => {
       rec.state.minimized = true;
-      rec.el.classList.remove("minimizing");
       applyState(rec);
       bus.emit("window-minimize", { appId: rec.app.id });
     }, 240);

@@ -1,27 +1,34 @@
 import { bus } from "./event-bus.js";
+import { profiles } from "./profiles.js";
 
-const STORAGE_KEY = "novaos:v1";
+const STORAGE_KEY = profiles.storageKey();
 
-const defaultState = () => ({
-  version: 1,
-  user: { name: "Friend", avatar: "🙂" },
-  prefs: {
-    theme: "dark",                // 'dark' | 'light' | 'system'
-    accent: "#5b8def",
-    wallpaper: "aurora",
-    dockStyle: "floating",        // 'floating' | 'bar'
-    reduceMotion: false,
-    largeText: false,
-  },
-  windows: {},                    // appId -> { x, y, w, h, maximized }
-  recent: [],
-  desktopShortcuts: ["files", "notes", "browser", "terminal", "settings"],
-  quickNote: "",
-  notifications: [],
-  fs: null,                       // populated by filesystem module
-  notes: [],
-  tasks: [],
-});
+const defaultState = () => {
+  const p = profiles.active();
+  return {
+    version: 1,
+    user: { name: p.name, avatar: p.avatar },
+    prefs: {
+      theme: "dark",
+      accent: "#5b8def",
+      wallpaper: "aurora",
+      dockStyle: "floating",
+      reduceMotion: false,
+      largeText: false,
+      animatedWallpaper: true,
+      sounds: false,
+    },
+    windows: {},
+    recent: [],
+    desktopShortcuts: ["files", "notes", "browser", "terminal", "settings"],
+    quickNote: "",
+    notifications: [],
+    fs: null,
+    notes: [],
+    tasks: [],
+    paint: [],
+  };
+};
 
 let state;
 let saveTimer;
@@ -84,9 +91,9 @@ export const store = {
     bus.emit("state-change", state);
   },
 
-  /** Wipe all persisted data */
+  /** Wipe all persisted data for the active profile */
   reset() {
-    localStorage.removeItem(STORAGE_KEY);
+    try { localStorage.removeItem(STORAGE_KEY); } catch {}
     state = defaultState();
     bus.emit("state-reset", state);
     bus.emit("state-change", state);
