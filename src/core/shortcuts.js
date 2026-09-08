@@ -40,6 +40,7 @@ export function installShortcuts() {
       return;
     }
     if (mod && k === "n") {
+      e.preventDefault();
       // delegate to focused window's app — fallback: open notes
       bus.emit("shortcut-new");
       return;

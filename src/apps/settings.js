@@ -27,7 +27,7 @@ export default {
     el.innerHTML = `
       <div class="settings-layout">
         <aside class="settings-side">
-          ${SECTIONS.map((s) => `<div class="sidebar-item" data-sec="${s.id}"><span>${s.icon}</span><span>${s.label}</span></div>`).join("")}
+          ${SECTIONS.map((s) => `<button class="sidebar-item" data-sec="${s.id}"><span>${s.icon}</span><span>${s.label}</span></button>`).join("")}
         </aside>
         <main class="settings-pane scroll-thin" id="pane"></main>
       </div>
@@ -72,7 +72,7 @@ export default {
           <div class="settings-row">
             <div class="label"><div class="title">Accent color</div><div class="desc">Used for highlights and buttons.</div></div>
             <div class="swatch-row" id="accent-swatches">
-              ${accents.map((c) => `<div class="swatch ${c === prefs.accent ? "active" : ""}" data-accent="${c}" style="background:${c}"></div>`).join("")}
+              ${accents.map((c) => `<button aria-label="Accent ${c}" class="swatch ${c === prefs.accent ? "active" : ""}" data-accent="${c}" style="background:${c}"></button>`).join("")}
             </div>
           </div>
 
@@ -292,7 +292,8 @@ export default {
           try {
             const text = await f.text();
             const parsed = JSON.parse(text);
-            localStorage.setItem("novaos:v1", JSON.stringify(parsed));
+            if (!confirm('Restore this backup? It replaces the current profile’s data.')) return;
+            store.restore(parsed);
             bus.emit("notify", { title: "Import OK", body: "Reloading…" });
             setTimeout(() => location.reload(), 500);
           } catch (err) {
@@ -303,19 +304,13 @@ export default {
       },
     };
 
-    // React to quick settings buttons from notification center
-    const unsubQuick = bus.on("quick-setting", ({ key }) => {
-      if (key === "theme") { theme.setTheme(store.get().prefs.theme === "dark" ? "light" : "dark"); }
-      if (key === "reduce-motion") theme.toggleReduceMotion();
-      if (key === "wallpaper") { ctx.openApp("settings", { tab: "appearance" }); }
-      if (key === "reset") { if (confirm("Reset everything?")) { store.reset(); setTimeout(() => location.reload(), 100); } }
-      if (activeSec) render();
-    });
+    const unsubTheme = bus.on('theme-change', () => { if (['appearance','dock','accessibility'].includes(activeSec)) render(); });
 
     render();
 
     return {
-      unmount() { unsubQuick(); el.remove(); },
+      onOpen(opts) { if (opts.tab && renderers[opts.tab]) { activeSec = opts.tab; render(); } },
+      unmount() { unsubTheme(); el.remove(); },
     };
   },
 };

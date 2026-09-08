@@ -2,10 +2,12 @@ import { store } from "./state.js";
 import { bus } from "./event-bus.js";
 import { registry } from "./app-registry.js";
 import { sound } from "./sound.js";
+import { contextMenu } from '../ui/context-menu.js';
 
 let zCounter = 100;
 const windows = new Map();   // id -> { id, appId, el, app, instance, state }
 let focused = null;
+let workspace = 0;
 const root = () => document.getElementById("windows");
 
 const isSmallScreen = () => window.innerWidth < 760;
@@ -14,7 +16,7 @@ function clamp(n, min, max) { return Math.min(Math.max(n, min), max); }
 
 function viewportBounds() {
   const dockH = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--dock-h")) || 64;
-  return { x: 0, y: 0, w: window.innerWidth, h: window.innerHeight - dockH };
+  return { x: 0, y: 0, w: window.innerWidth, h: Math.max(200, window.innerHeight - dockH - 44) };
 }
 
 function nextDefaultPos(w, h) {
@@ -37,12 +39,12 @@ function buildShell(app, opts) {
   el.innerHTML = `
     <header class="window-titlebar">
       <div class="window-controls">
-        <button class="win-ctrl close" aria-label="Close" tabindex="-1"></button>
-        <button class="win-ctrl min" aria-label="Minimize" tabindex="-1"></button>
-        <button class="win-ctrl max" aria-label="Maximize" tabindex="-1"></button>
+        <button class="win-ctrl close" aria-label="Close"></button>
+        <button class="win-ctrl min" aria-label="Minimize"></button>
+        <button class="win-ctrl max" aria-label="Maximize"></button>
       </div>
       <div class="window-title"><span class="window-title-icon">${app.icon || ""}</span><span class="window-title-text">${escapeHtml(opts.title || app.name)}</span></div>
-      <div class="window-title-spacer"></div>
+      <button class="window-layout-control" aria-label="Arrange window" title="Arrange window">▥</button>
     </header>
     <div class="window-body"><div class="window-content scroll-thin"></div></div>
     <div class="window-resize n"></div>
@@ -63,6 +65,7 @@ function escapeHtml(s) {
 
 function applyState(rec) {
   const { el, state } = rec;
+  el.classList.toggle("workspace-hidden", (state.workspace || 0) !== workspace);
   if (state.maximized || isSmallScreen()) {
     el.classList.add("maximized");
     const vp = viewportBounds();
@@ -96,6 +99,7 @@ function setFocus(id) {
   for (const rec of windows.values()) rec.el.classList.add("unfocused");
   const rec = windows.get(id);
   if (!rec) return;
+  if ((rec.state.workspace || 0) !== workspace) manager.switchWorkspace(rec.state.workspace || 0);
   rec.el.classList.remove("unfocused");
   rec.el.style.zIndex = String(++zCounter);
   focused = id;
@@ -110,7 +114,8 @@ function attachDrag(rec) {
   let snapZone = null;
 
   const onDown = (e) => {
-    if (e.target.closest(".win-ctrl")) return;
+    if (isSmallScreen()) return;
+    if (e.target.closest("button")) return;
     if (rec.state.maximized) {
       // restore on drag-out from maximized
       const r = rec.el.getBoundingClientRect();
@@ -131,7 +136,7 @@ function attachDrag(rec) {
     if (!dragging) return;
     const vp = viewportBounds();
     const nx = clamp(e.clientX - offset.x, -rec.state.w + 80, vp.w - 80);
-    const ny = clamp(e.clientY - offset.y, 0, vp.h - 40);
+    const ny = clamp(e.clientY - offset.y - 44, 0, vp.h - 40);
     rec.state.x = nx;
     rec.state.y = ny;
     rec.el.style.left = nx + "px";
@@ -192,22 +197,26 @@ function attachDrag(rec) {
     const t = e.touches[0];
     onDown({ target: e.target, clientX: t.clientX, clientY: t.clientY, preventDefault: () => {} });
   }, { passive: true });
-  document.addEventListener("touchmove", (e) => {
+  const onTouchMove = (e) => {
     if (!dragging) return;
     const t = e.touches[0];
     onMove({ clientX: t.clientX, clientY: t.clientY });
-  }, { passive: true });
+  };
+  document.addEventListener("touchmove", onTouchMove, { passive: true });
   document.addEventListener("touchend", onUp);
 
   // Double click titlebar to toggle maximize
   bar.addEventListener("dblclick", (e) => {
-    if (e.target.closest(".win-ctrl")) return;
+    if (e.target.closest("button")) return;
     manager.toggleMaximize(rec.id);
   });
 
   rec._cleanup.push(() => {
     document.removeEventListener("mousemove", onMove);
     document.removeEventListener("mouseup", onUp);
+    document.removeEventListener("touchmove", onTouchMove);
+    document.removeEventListener("touchend", onUp);
+    preview?.remove();
   });
 }
 
@@ -265,6 +274,20 @@ function attachResize(rec) {
 }
 
 function attachControls(rec) {
+  const layout = rec.el.querySelector('.window-layout-control');
+  layout.addEventListener('click', () => {
+    const rect=layout.getBoundingClientRect();
+    contextMenu.open(rect.right-220,rect.bottom+6,[
+      {label:'Fill screen',action:()=>manager.snap(rec.id,'top')},
+      {label:'Left half',action:()=>manager.snap(rec.id,'left')},
+      {label:'Right half',action:()=>manager.snap(rec.id,'right')},
+      {sep:true},
+      ...[['tl','Top left'],['tr','Top right'],['bl','Bottom left'],['br','Bottom right']].map(([zone,label])=>({label,action:()=>manager.snap(rec.id,zone)})),
+      {sep:true},
+      {label:'Restore floating window',action:()=>manager.unsnap(rec.id)},
+      {label:'Tile all windows',action:()=>manager.tile()},
+    ]);
+  });
   rec.el.querySelector(".win-ctrl.close").addEventListener("click", () => manager.close(rec.id));
   rec.el.querySelector(".win-ctrl.min").addEventListener("click", () => manager.minimize(rec.id));
   rec.el.querySelector(".win-ctrl.max").addEventListener("click", () => manager.toggleMaximize(rec.id));
@@ -279,21 +302,25 @@ export const manager = {
     // Singleton: focus existing
     if (windows.has(appId)) {
       const rec = windows.get(appId);
+      clearTimeout(rec.minTimer);
+      if (rec.closing) return null;
       if (rec.state.minimized) {
         rec.state.minimized = false;
         applyState(rec);
       }
       setFocus(rec.id);
+      rec.instance?.onOpen?.(opts);
       return rec;
     }
 
     const persisted = store.get().windows[appId];
     const defaultSize = app.defaultSize || { w: 720, h: 480 };
-    const w = persisted?.w || defaultSize.w;
-    const h = persisted?.h || defaultSize.h;
+    const vp = viewportBounds();
+    const w = Math.min(persisted?.w || defaultSize.w, vp.w);
+    const h = Math.min(persisted?.h || defaultSize.h, vp.h);
     const pos = persisted ? { x: persisted.x, y: persisted.y } : nextDefaultPos(w, h);
     const state = {
-      x: pos.x, y: pos.y, w, h,
+      x: clamp(pos.x, 0, vp.w - w), y: clamp(pos.y, 0, vp.h - h), w, h, workspace,
       maximized: persisted?.maximized || false,
       minimized: false,
     };
@@ -342,6 +369,9 @@ export const manager = {
   close(id) {
     const rec = windows.get(id);
     if (!rec) return;
+    if (rec.closing) return;
+    rec.closing = true;
+    clearTimeout(rec.minTimer);
     sound.close();
     try { rec.instance?.unmount?.(); } catch (e) { console.error(e); }
     rec.el.classList.add("closing");
@@ -349,6 +379,11 @@ export const manager = {
       rec._cleanup?.forEach((fn) => fn());
       rec.el.remove();
       windows.delete(id);
+      if (focused === id) {
+        focused = null;
+        const next = [...windows.values()].filter(r => !r.state.minimized && r.state.workspace === workspace && !r.closing).pop();
+        if (next) setFocus(next.id);
+      }
       bus.emit("window-close", { appId: rec.app.id });
     }, 180);
   },
@@ -356,6 +391,8 @@ export const manager = {
   minimize(id) {
     const rec = windows.get(id);
     if (!rec) return;
+    if (rec.state.minimized || rec.closing) return;
+    clearTimeout(rec.minTimer);
     // FLIP-style: animate toward the dock icon for this app
     const target = document.querySelector(`.dock-item[data-app="${rec.app.id}"]`);
     if (target && !document.documentElement.dataset.reduceMotion?.match(/true/)) {
@@ -374,9 +411,14 @@ export const manager = {
         { duration: 260, easing: "cubic-bezier(0.55, 0, 0.85, 0.6)" }
       );
     }
-    setTimeout(() => {
+    rec.minTimer = setTimeout(() => {
       rec.state.minimized = true;
       applyState(rec);
+      if (focused === id) {
+        focused = null;
+        const next = [...windows.values()].filter(r => r.id !== id && !r.state.minimized && r.state.workspace === workspace).pop();
+        if (next) setFocus(next.id);
+      }
       bus.emit("window-minimize", { appId: rec.app.id });
     }, 240);
   },
@@ -384,6 +426,7 @@ export const manager = {
   restore(id) {
     const rec = windows.get(id);
     if (!rec) return;
+    clearTimeout(rec.minTimer);
     rec.state.minimized = false;
     applyState(rec);
     setFocus(id);
@@ -401,11 +444,55 @@ export const manager = {
   focus(id) {
     const rec = windows.get(id);
     if (!rec) return;
+    clearTimeout(rec.minTimer);
     if (rec.state.minimized) this.restore(id);
     else setFocus(id);
   },
 
   focused() { return focused; },
+  snap(id, zone) {
+    const rec=windows.get(id);
+    if(!rec || !['top','left','right','tl','tr','bl','br'].includes(zone))return;
+    if(!rec.unsnapped)rec.unsnapped={x:rec.state.x,y:rec.state.y,w:rec.state.w,h:rec.state.h};
+    const region=snapRegion(zone);
+    clearTimeout(rec.minTimer);
+    Object.assign(rec.state,region,{maximized:zone==='top',minimized:false});
+    applyState(rec);setFocus(id);persist(rec);
+  },
+  unsnap(id) {
+    const rec=windows.get(id);if(!rec)return;
+    const vp=viewportBounds(),size=rec.app.defaultSize||{w:720,h:480};
+    const geometry=rec.unsnapped||{x:(vp.w-Math.min(size.w,vp.w))/2,y:35,w:Math.min(size.w,vp.w),h:Math.min(size.h,vp.h)};
+    Object.assign(rec.state,geometry,{maximized:false});
+    rec.state.w=Math.min(rec.state.w,vp.w);rec.state.h=Math.min(rec.state.h,vp.h);
+    rec.state.x=clamp(rec.state.x,0,vp.w-rec.state.w);rec.state.y=clamp(rec.state.y,0,vp.h-rec.state.h);
+    rec.unsnapped=null;applyState(rec);persist(rec);
+  },
+  workspace() { return workspace; },
+  switchWorkspace(index) {
+    workspace = clamp(index, 0, 2);
+    focused = null;
+    windows.forEach(applyState);
+    const next = [...windows.values()].filter(r => r.state.workspace === workspace && !r.state.minimized).pop();
+    if (next) setFocus(next.id);
+    bus.emit("workspace-change", { workspace });
+  },
+  moveToWorkspace(id, index) {
+    const rec = windows.get(id);
+    if (!rec) return;
+    rec.state.workspace = clamp(index, 0, 2);
+    this.switchWorkspace(workspace);
+  },
+  tile() {
+    const visible = [...windows.values()].filter(r => r.state.workspace === workspace && !r.state.minimized);
+    if (!visible.length) return;
+    const vp = viewportBounds(), cols = Math.ceil(Math.sqrt(visible.length)), rows = Math.ceil(visible.length / cols);
+    visible.forEach((rec, i) => {
+      Object.assign(rec.state, { maximized: false, x: (i % cols) * vp.w / cols + 6, y: Math.floor(i / cols) * vp.h / rows + 6, w: vp.w / cols - 12, h: vp.h / rows - 12 });
+      applyState(rec); persist(rec);
+    });
+  },
+  showDesktop() { windows.forEach(rec => { if (rec.state.workspace === workspace) this.minimize(rec.id); }); },
   list() { return Array.from(windows.values()); },
   has(id) { return windows.has(id); },
 
@@ -417,6 +504,8 @@ window.addEventListener("resize", () => {
     if (rec.state.maximized) applyState(rec);
     else {
       const vp = viewportBounds();
+      rec.state.w = Math.min(rec.state.w, vp.w);
+      rec.state.h = Math.min(rec.state.h, vp.h);
       if (rec.state.x + rec.state.w > vp.w) rec.state.x = Math.max(0, vp.w - rec.state.w);
       if (rec.state.y + rec.state.h > vp.h) rec.state.y = Math.max(0, vp.h - rec.state.h);
       applyState(rec);

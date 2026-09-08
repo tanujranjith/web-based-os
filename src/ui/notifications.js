@@ -1,6 +1,8 @@
 import { store } from "../core/state.js";
 import { bus } from "../core/event-bus.js";
 import { sound } from "../core/sound.js";
+import { theme } from '../core/theme.js';
+import { manager } from '../core/window-manager.js';
 
 let toastsEl;
 let ncListEl;
@@ -22,6 +24,12 @@ export function initNotifications() {
   });
 
   bus.on("notify", notify);
+  bus.on('quick-setting', ({key}) => {
+    if(key==='theme') theme.setTheme(document.documentElement.dataset.theme==='dark'?'light':'dark');
+    if(key==='reduce-motion') theme.toggleReduceMotion();
+    if(key==='wallpaper') { closeCenter(); manager.open('settings',{tab:'appearance'}); }
+    if(key==='reset' && confirm('Reset all data for the current profile?')) { store.reset(); location.reload(); }
+  });
   bus.on("escape", () => { if (!ncEl.hidden) closeCenter(); });
 
   // Quick settings buttons handled by their owners — we just dispatch events
@@ -36,10 +44,10 @@ export function initNotifications() {
 export function notify({ title, body, icon }) {
   const t = { id: crypto.randomUUID?.() || String(Date.now()), title, body, icon, at: Date.now() };
   store.update((s) => { s.notifications = [t, ...s.notifications].slice(0, 50); });
-  showToast(t);
+  if (!store.get().prefs.doNotDisturb) showToast(t);
   if (ncEl && !ncEl.hidden) renderCenter();
   updateDot();
-  sound.notify();
+  if (!store.get().prefs.doNotDisturb) sound.notify();
 }
 
 function showToast(t) {

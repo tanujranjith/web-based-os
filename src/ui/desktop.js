@@ -32,16 +32,10 @@ export function initDesktop() {
     const cur = store.get().desktopShortcuts.join(",");
     if (cur !== lastShortcuts) { lastShortcuts = cur; renderIcons(); }
   });
-  bus.on("fs-change", () => {
-    // refresh widgets that depend on fs
-    updateStatsWidget();
-  });
   bus.on("dock-context", ({ app, x, y }) => {
     contextMenu.open(x, y, dockMenuItems(app));
   });
 
-  setInterval(updateTimeWidget, 1000 * 30);
-  setInterval(updateStatsWidget, 1000 * 5);
 }
 
 function renderIcons() {
@@ -88,7 +82,7 @@ function deselect() {
 }
 
 function onDesktopContext(e) {
-  if (e.target.closest(".desktop-icon")) return;
+  if (e.target.closest(".desktop-icon, .globe-handle")) return;
   e.preventDefault();
   contextMenu.open(e.clientX, e.clientY, [
     { label: "Open Launcher", shortcut: "Ctrl/⌘ Space", action: () => bus.emit("launcher-open") },
@@ -98,7 +92,7 @@ function onDesktopContext(e) {
     { label: "Open Settings", shortcut: "Ctrl/⌘ ,", action: () => manager.open("settings") },
     { label: "Change Wallpaper", action: () => manager.open("settings", { tab: "appearance" }) },
     { sep: true },
-    { label: "Refresh", action: () => { renderIcons(); renderWidgets(); } },
+    { label: "Refresh", action: () => { renderIcons(); bus.emit('desktop-refresh'); } },
   ]);
 }
 
@@ -128,93 +122,9 @@ function dockMenuItems(app) {
 
 function renderWidgets() {
   widgetsEl.innerHTML = "";
-  widgetsEl.appendChild(timeWidget());
-  widgetsEl.appendChild(statsWidget());
-  widgetsEl.appendChild(monitorWidget());
   widgetsEl.appendChild(quickNoteWidget());
-  updateTimeWidget();
-  updateStatsWidget();
-  startMonitor();
 }
 
-let monRAF, monLast = performance.now(), monFrames = 0, monFPS = 0, monStop = false;
-function startMonitor() {
-  monStop = false;
-  const loop = () => {
-    if (monStop) return;
-    monFrames++;
-    const now = performance.now();
-    if (now - monLast >= 500) {
-      monFPS = Math.round((monFrames * 1000) / (now - monLast));
-      monFrames = 0; monLast = now;
-      updateMonitor();
-    }
-    monRAF = requestAnimationFrame(loop);
-  };
-  monRAF = requestAnimationFrame(loop);
-}
-function updateMonitor() {
-  const fpsEl = document.getElementById("w-fps");
-  if (!fpsEl) return;
-  fpsEl.textContent = `${monFPS}`;
-  const heap = performance.memory?.usedJSHeapSize;
-  const heapEl = document.getElementById("w-heap");
-  if (heapEl) heapEl.textContent = heap ? `${(heap / 1024 / 1024).toFixed(1)} MB` : "—";
-  // Update simple FPS bar
-  const bar = document.getElementById("w-fps-bar");
-  if (bar) {
-    const w = Math.max(2, Math.min(100, monFPS * 1.6));
-    bar.style.width = w + "%";
-    bar.style.background = monFPS >= 50 ? "var(--accent)" : monFPS >= 30 ? "#ffb266" : "#ff8a8a";
-  }
-}
-function monitorWidget() {
-  const el = document.createElement("div");
-  el.className = "widget widget-monitor";
-  el.innerHTML = `<h3>Monitor</h3>
-    <div class="widget-row"><span>FPS</span><strong id="w-fps">—</strong></div>
-    <div class="widget-bar"><div id="w-fps-bar" style="width:0%"></div></div>
-    <div class="widget-row" style="margin-top:6px"><span>JS Heap</span><strong id="w-heap">—</strong></div>
-  `;
-  return el;
-}
-
-function timeWidget() {
-  const el = document.createElement("div");
-  el.className = "widget widget-time";
-  el.innerHTML = `<h3>Time</h3><div class="widget-clock-time" id="w-time">—</div><div class="widget-clock-date" id="w-date">—</div>`;
-  return el;
-}
-function updateTimeWidget() {
-  const t = document.getElementById("w-time");
-  const d = document.getElementById("w-date");
-  if (!t) return;
-  const now = new Date();
-  t.textContent = now.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
-  d.textContent = now.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
-}
-
-function statsWidget() {
-  const el = document.createElement("div");
-  el.className = "widget widget-stats";
-  el.innerHTML = `<h3>System</h3>
-    <div class="widget-row"><span>Open apps</span><strong id="w-apps">0</strong></div>
-    <div class="widget-row"><span>Files</span><strong id="w-files">0</strong></div>
-    <div class="widget-row"><span>Storage</span><strong id="w-storage">—</strong></div>
-  `;
-  return el;
-}
-function updateStatsWidget() {
-  const apps = document.getElementById("w-apps");
-  if (!apps) return;
-  apps.textContent = manager.list().length;
-  const totals = fs.countAll("/");
-  document.getElementById("w-files").textContent = totals.files;
-  try {
-    const used = (new Blob([localStorage.getItem("novaos:v1") || ""]).size / 1024).toFixed(1);
-    document.getElementById("w-storage").textContent = `${used} KB`;
-  } catch { document.getElementById("w-storage").textContent = "—"; }
-}
 
 function quickNoteWidget() {
   const el = document.createElement("div");
@@ -222,10 +132,8 @@ function quickNoteWidget() {
   el.innerHTML = `<h3>Quick note</h3><textarea placeholder="Jot something quickly…"></textarea>`;
   const ta = el.querySelector("textarea");
   ta.value = store.get().quickNote || "";
-  let timer;
   ta.addEventListener("input", () => {
-    clearTimeout(timer);
-    timer = setTimeout(() => store.update((s) => { s.quickNote = ta.value; }), 250);
+    store.update((s) => { s.quickNote = ta.value; });
   });
   return el;
 }

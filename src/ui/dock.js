@@ -13,7 +13,7 @@ export function initDock() {
   netEl = document.getElementById("tray-net");
   batEl = document.getElementById("tray-battery");
 
-  document.getElementById("tray-clock").addEventListener("click", () => manager.open("about"));
+  document.getElementById("tray-clock").addEventListener("click", () => manager.open("clock"));
 
   setupNetwork();
   setupBattery();
@@ -83,7 +83,7 @@ function makeDockItem(app) {
   btn.addEventListener("click", () => {
     if (manager.has(app.id)) {
       const focused = manager.focused();
-      if (focused === app.id) manager.minimize(app.id);
+      if (focused === app.id && !manager.list().find(r => r.id === app.id)?.state.minimized) manager.minimize(app.id);
       else manager.focus(app.id);
     } else {
       manager.open(app.id);

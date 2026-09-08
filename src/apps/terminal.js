@@ -3,7 +3,7 @@ import { store } from "../core/state.js";
 import { manager } from "../core/window-manager.js";
 import { registry } from "../core/app-registry.js";
 
-const VERSION = "1.0.0";
+const VERSION = "3.0.0 · Orbit";
 
 export default {
   id: "terminal",
@@ -244,7 +244,7 @@ function neofetch() {
   const ua = navigator.userAgent;
   const screen = `${window.innerWidth}×${window.innerHeight}`;
   let storageUsed = "?";
-  try { storageUsed = (new Blob([localStorage.getItem("novaos:v1") || ""]).size / 1024).toFixed(1) + " KB"; } catch {}
+  try { storageUsed = (new Blob([JSON.stringify(store.get())]).size / 1024).toFixed(1) + " KB"; } catch {}
   return [
     `       /\\         OS:        NovaOS ${VERSION}`,
     `      /  \\        Kernel:    Browser ECMAScript`,

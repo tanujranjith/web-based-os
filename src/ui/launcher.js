@@ -5,11 +5,21 @@ import { trapFocus } from "./focus-trap.js";
 
 let el, input, grid, activeIndex = 0, filtered = [];
 let releaseTrap = null;
+let category = 'All';
 
 export function initLauncher() {
   el = document.getElementById("launcher");
   input = document.getElementById("launcher-input");
   grid = document.getElementById("launcher-grid");
+  input.placeholder = 'Find your next possibility…';
+  const panel = el.querySelector('.launcher-panel');
+  panel.insertAdjacentHTML('afterbegin', `<div class="launch-heading"><h2>A world of possibilities.</h2><span>${registry.all().length} apps. One little universe.</span></div>`);
+  const categories = document.createElement('nav');
+  categories.className = 'launch-categories';
+  categories.setAttribute('aria-label', 'App categories');
+  categories.innerHTML = ['All', ...new Set(registry.all().map(a=>a.category || 'Apps'))].map(c=>`<button data-category="${escape(c)}" class="${c==='All'?'active':''}">${escape(c)}</button>`).join('');
+  grid.before(categories);
+  categories.querySelectorAll('button').forEach(b=>b.onclick=()=>{category=b.dataset.category;activeIndex=0;categories.querySelectorAll('button').forEach(x=>x.classList.toggle('active',x===b));render();});
 
   document.getElementById("dock-launcher").addEventListener("click", () => toggle());
   el.querySelector('[data-close="launcher"]').addEventListener("click", close);
@@ -48,13 +58,12 @@ function onKey(e) {
 }
 
 function computeCols() {
-  const w = grid.clientWidth || 600;
-  return Math.max(1, Math.floor(w / 120));
+  return getComputedStyle(grid).gridTemplateColumns.split(' ').length || 1;
 }
 
 function render() {
   const q = input.value.trim().toLowerCase();
-  const all = registry.all();
+  const all = registry.all().filter(a=>category==='All'||(a.category||'Apps')===category);
   filtered = q
     ? all.filter((a) => a.name.toLowerCase().includes(q) || (a.category || "").toLowerCase().includes(q) || (a.keywords || []).some((k) => k.toLowerCase().includes(q)))
     : all;
@@ -77,6 +86,7 @@ function render() {
 }
 
 function open() {
+  if (!el.hidden) return;
   el.hidden = false;
   input.value = "";
   activeIndex = 0;

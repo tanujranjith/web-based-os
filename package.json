@@ -1,0 +1,13 @@
+{
+  "name": "novaos-orbit",
+  "version": "3.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A local-first web desktop with 23 apps, Calendar, Desktop Studio, and three workspaces.",
+  "scripts": {
+    "start": "node scripts/serve.mjs",
+    "check": "node scripts/check.mjs",
+    "test": "node --test"
+  },
+  "engines": { "node": ">=20" }
+}

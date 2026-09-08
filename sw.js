@@ -1,10 +1,10 @@
-const VERSION = "novaos-v2";
+const VERSION = "novaos-v3-orbit";
 
 self.addEventListener("install", (e) => { self.skipWaiting(); });
 
 self.addEventListener("activate", (e) => {
   e.waitUntil(
-    caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== VERSION).map((k) => caches.delete(k))))
+    caches.keys().then((keys) => Promise.all(keys.filter((k) => k.startsWith('novaos-') && k !== VERSION).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });

@@ -1,0 +1,237 @@
+/* macOS-inspired chrome. NovaOS apps and data remain local. */
+:root {
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI Variable", "Segoe UI", sans-serif;
+  --glass-alpha: .57;
+  --glass-rgb: 238, 243, 255;
+  --dock-h: 92px;
+  --radius-lg: 18px;
+}
+:root[data-theme="dark"] {
+  --glass-rgb: 34, 39, 56;
+  --bg-0: #161923;
+  --bg-1: #20222c;
+  --bg-2: #2c2e39;
+  --surface: rgba(var(--glass-rgb), var(--glass-alpha));
+  --surface-strong: rgba(37, 40, 54, .91);
+  --surface-hi: #ffffff08;
+  --surface-hi-hover: #ffffff13;
+  --text: #f2f3f8;
+  --text-dim: #b2b5c2;
+  --text-mute: #84899b;
+  --border: #ffffff13;
+  --border-strong: #ffffff29;
+}
+:root[data-theme="light"] {
+  --bg-0: #eff1f7;
+  --bg-1: #f7f7fa;
+  --bg-2: #ffffff;
+  --surface: rgba(var(--glass-rgb), var(--glass-alpha));
+  --surface-strong: rgba(246, 247, 253, .92);
+  --text: #232631;
+  --text-dim: #646a7b;
+  --text-mute: #7b8292;
+}
+[data-wallpaper="orbit"] .wallpaper {
+  background: radial-gradient(ellipse at 72% 20%, #aa9fea88, transparent 48%), radial-gradient(ellipse at 30% 88%, #6a91edbb, transparent 52%), linear-gradient(145deg, #141f54, #475b99 50%, #9887c8) !important;
+}
+.wallpaper::after { background: linear-gradient(180deg, #060a2320, transparent 25%, #11172e22); }
+.wallpaper-canvas { opacity: .12 !important; }
+.orbit-planet {
+  --planet-size: min(57vw, 77vh);
+  width: var(--planet-size); height: var(--planet-size);
+  left: calc(57% - var(--planet-size) / 2);
+  top: calc(49% - var(--planet-size) / 2);
+  background: radial-gradient(circle at 27% 22%, #d4d4f0 0%, #a5b1d5 18%, #6b85be 40%, #3a5794 62%, #253a71 80%, #182b58 100%);
+  box-shadow: inset 15px 12px 40px #f1e8ff4d, inset -25px -32px 48px #081f555c, 0 30px 100px #0b1c5726;
+  opacity: 1;
+}
+.orbit-ring { left: 21%; top: 28%; width: 72vw; height: 27vw; border-color: #dbe9ff75; box-shadow: 0 0 3px #e9e8ff20; }
+.ring-two { left: 20.5%; top: 27.4%; width: 73vw; height: 28vw; border-color: #e6e9ff38; }
+.ring-three { left: 18.5%; top: 25%; width: 77vw; height: 32vw; border-color: #e6e9ff1c; }
+.orbit-glow { left: 25%; top: 1%; width: 65vw; height: 65vw; background: radial-gradient(circle, #c8ddfc30, transparent 65%); }
+.orbit-moon { left: 34%; top: 67%; width: 28px; height: 28px; background: radial-gradient(circle at 28% 20%, #f7d8db, #b5a3cd 40%, #676caa 70%, #3d4988); }
+.globe-help { color: #e5ebffc9; text-shadow: 0 1px 8px #10173555; font-size: 9px; letter-spacing: 1.6px; }
+.globe-controls:has(.globe-handle:hover) .globe-help { color: white; }
+.globe-handle:focus-visible { box-shadow: inset 0 0 0 2px #c4ddff90; }
+
+/* Menu bar */
+.system-bar { height: 32px; padding: 0 18px; gap: 16px; background: #151c432b; border: 0; backdrop-filter: blur(30px) saturate(160%); font-size: 12px; color: white; }
+.system-brand { width: 20px; height: 26px; justify-content: center; }
+.mac-nova-mark { font-size: 23px; line-height: 1; color: white; }
+.bar-separator { display: none; }
+#active-app { min-width: 48px; font-size: 12px; font-weight: 650; }
+.mac-menus { display: flex; height: 100%; align-items: center; gap: 2px; }
+.mac-menus button { padding: 6px 9px; border-radius: 5px; font-size: 12px; }
+.mac-menus button:hover, .system-actions button:hover { background: #ffffff20; }
+.system-actions { gap: 13px; }
+.system-actions button { border-radius: 5px; padding: 3px; }
+#system-time { font-size: 11px; font-weight: 550; }
+.space-tabs { position: absolute; left: 55%; transform: translateX(-50%); gap: 1px; }
+.space-tabs button { padding: 5px 8px; color: #e2e8ff; font-size: 10px; }
+.space-tabs button[aria-pressed="true"] { color: white; background: #ffffff20; }
+.space-tabs button[aria-pressed="true"] .space-dot { background: white; }
+
+/* Desktop widgets sit to the left; shortcuts form a column on the right. */
+.desktop { inset: 44px 0 115px; overflow: visible; }
+.desktop-home { display: none; }
+.desktop-widgets { left: 24px; right: auto; top: 16px; width: 236px; gap: 16px; }
+.widget { background: rgba(var(--glass-rgb), var(--glass-alpha)); color: var(--text); border: 1px solid #ffffff40; box-shadow: inset 0 1px 0 #ffffff44, inset 0 -1px 0 #ffffff13, 0 8px 24px #101a4826; backdrop-filter: blur(32px) saturate(145%); border-radius: 23px; padding: 20px; }
+.widget-label, .widget-quick-note h3 { font-size: 10px; letter-spacing: .1px; color: var(--text-dim); font-weight: 600; }
+.orbit-today #orbit-time { font-size: 49px; font-weight: 250; letter-spacing: -2px; }
+.orbit-today #orbit-date { color: var(--text-dim); font-size: 11px; }
+.week-strip small { color: var(--text-dim); }
+.week-strip .current { background: #ff453a; color: white; }
+.week-strip .current small { color: #fff; }
+.day-agenda { border-color: var(--border); }
+.day-agenda small { color: var(--text-dim); }
+.agenda-mark { background: #ff9f0a; }
+.focus-summary h3 { color: var(--text); font-size: 12px; }
+.focus-summary p { color: var(--text-dim); }
+.focus-dial { border-color: #84b8ff; border-left-color: #84b8ff33; }
+.focus-start { background: #ffffff19; border: 1px solid #ffffff25; color: var(--text); border-radius: 10px; font-size: 11px; }
+.focus-start:hover { background: #0a84ff; color: white; }
+.widget-quick-note { background: rgba(var(--glass-rgb), var(--glass-alpha)); }
+.widget-quick-note h3 { color: var(--text-dim); }
+.widget-quick-note textarea { color: var(--text); }
+.widget-quick-note textarea::placeholder, .scratch-saved { color: var(--text-dim); }
+.desktop-icons { left: auto; right: 22px; top: 18px; bottom: auto; max-width: 90px; flex-direction: column; gap: 16px; overflow: visible; }
+.desktop-icon { width: 78px; height: 83px; padding: 6px; border-radius: 10px; gap: 6px; }
+.desktop-icon-glyph { width: 51px; height: 51px; border-radius: 13px; }
+.desktop-icon-label { color: white !important; font-size: 11px; text-shadow: 0 1px 4px #112445; }
+.desktop-bottom { bottom: 105px; color: #eef0ffd0; font-size: 10px; left: 27px; right: 28px; }
+.desktop-bottom > span { display: none; }
+.wallpaper-picker { margin-left: auto; margin-right: 22px; }
+.wallpaper-picker button { border-color: #ffffff70; }
+.desktop-bottom #desktop-reveal { color: white; }
+
+/* Colorful, softly rounded icons and a magnifying glass Dock. */
+[data-app="files"] { --app-color: #ffffff; --app-bg: #198ad9; }
+[data-app="notes"] { --app-color: #fffef7; --app-bg: #d6a322; }
+[data-app="browser"] { --app-color: white; --app-bg: #1389dd; }
+[data-app="terminal"] { --app-color: #f1f1f5; --app-bg: #20212a; }
+[data-app="settings"] { --app-color: #f5f5f9; --app-bg: #777e8f; }
+[data-app="board"] { --app-color: white; --app-bg: #8054cc; }
+[data-app="music"] { --app-color: white; --app-bg: #ed3e60; }
+[data-app="tasks"] { --app-color: white; --app-bg: #269d81; }
+.dock { bottom: 12px; height: 76px; padding: 9px 13px; gap: 10px; border-radius: 25px; background: rgba(var(--glass-rgb), var(--glass-alpha)); border: 1px solid #ffffff66; box-shadow: inset 0 1px 1px #ffffff80, inset 0 -1px 1px #ffffff33, 0 12px 32px #111b4338; backdrop-filter: blur(32px) saturate(160%); overflow: visible; }
+.dock-item, .dock-item:hover { width: 52px; height: 52px; transform: translateY(var(--dock-lift, 0px)) scale(var(--dock-scale, 1)); transform-origin: bottom center; transition: transform 110ms ease-out; background: none; }
+.dock-item .g { width: 49px; height: 49px; border-radius: 13px; box-shadow: inset 0 1px 1px #ffffff66, inset 0 -1px 0 #00000025, 0 4px 7px #00000026; }
+.dock-item .g svg { width: 29px; height: 29px; stroke-width: 1.6; }
+#dock-pinned { overflow: visible; }
+.dock-running { overflow: auto; max-width: 27vw; scrollbar-width: none; }
+.dock-items { min-width: 0; }
+.dock-item { flex-shrink: 0; }
+.desktop-widgets { overflow: visible; }
+.desktop-widgets .widget { min-width: 0; width: 100%; }
+.dock-items { gap: 7px; }
+.dock-launcher-grid span { background: var(--text); border-radius: 1px; }
+.dock-divider { background: var(--text-mute); opacity: .35; height: 38px; }
+.dock-indicator { background: var(--text); }
+.dock-item .tooltip { background: var(--surface-strong); color: var(--text); border-radius: 7px; padding: 5px 9px; backdrop-filter: blur(20px); }
+
+/* App windows use floating translucent chrome around solid content. */
+.window { border-radius: 18px; border: 1px solid #ffffff40; background: rgba(var(--glass-rgb), var(--glass-alpha)); box-shadow: 0 25px 75px #10152966, 0 2px 10px #11162d33, inset 0 1px 0 #ffffff44; backdrop-filter: blur(32px) saturate(145%); }
+.window-titlebar { height: 46px; padding: 0 15px; background: rgba(var(--glass-rgb), var(--glass-alpha)); border-color: var(--border); }
+.window-controls { gap: 8px; }
+.win-ctrl { width: 12px; height: 12px; }
+.window-title { color: var(--text); font-weight: 600; font-size: 12px; }
+.window-body { background: color-mix(in srgb, var(--bg-1) 96%, transparent); }
+.window.unfocused .window-titlebar { opacity: .9; }
+.window.unfocused .win-ctrl { background: #9599a477; }
+.window.unfocused .window-title { color: var(--text-dim); }
+.window.maximized { border-radius: 12px; }
+.app-sidebar, .settings-side, .notes-list { background: color-mix(in srgb, var(--bg-2) 72%, transparent); }
+.settings-side { margin: 10px; padding: 10px; border: 1px solid var(--border); border-radius: 15px; }
+.sidebar-item { border-radius: 7px; }
+.sidebar-item.active, .notes-item.active { background: #0a84ff; color: white; }
+.notes-item.active .nt-time, .notes-item.active .nt-snippet { color: #e5efff; }
+.btn { border-radius: 8px; }
+.btn.primary { background: #0a84ff; color: white; }
+.input, .select { border-radius: 8px; }
+.context-menu { min-width: 220px; border-radius: 11px; padding: 5px; background: var(--surface-strong); backdrop-filter: blur(35px) saturate(150%); border: 1px solid var(--border-strong); box-shadow: 0 15px 45px #0b143c50; }
+.launcher-panel, .palette-panel, .overview-panel { background: rgba(var(--glass-rgb), var(--glass-alpha)); backdrop-filter: blur(48px) saturate(170%); border: 1px solid #ffffff44; box-shadow: inset 0 1px 0 #ffffff55, 0 30px 85px #111b4855; }
+.launch-heading h2, .overview-heading h2 { font-family: var(--font); font-size: 27px; font-weight: 650; letter-spacing: -.8px; }
+.launch-categories button.active { background: #0a84ff; color: white; }
+.launcher-card .glyph { border-radius: 14px; box-shadow: inset 0 1px 0 #ffffff55, 0 4px 10px #00000022; }
+.launcher-search { border-radius: 14px; }
+.palette { z-index: 900; }
+.palette-search { border-radius: 17px; }
+.nc-panel { top: 40px; right: 10px; bottom: 100px; border-radius: 20px; background: var(--surface-strong); }
+
+/* Control Center */
+.mac-control-center { position: absolute; top: 40px; right: 14px; z-index: 800; width: 325px; padding: 17px; color: var(--text); border-radius: 24px; background: rgba(var(--glass-rgb), var(--glass-alpha)); backdrop-filter: blur(40px) saturate(165%); border: 1px solid #ffffff66; box-shadow: inset 0 1px 0 #ffffff66, 0 15px 55px #10172f66; }
+.mac-control-center header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; font-size: 13px; }
+.mac-control-center header button { width: 24px; height: 24px; border-radius: 50%; background: #ffffff16; font-size: 19px; }
+.mac-control-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.mac-control-grid button { display: grid; grid-template-columns: 30px 1fr; text-align: left; align-items: center; padding: 13px 11px; gap: 4px 6px; border-radius: 15px; background: #ffffff10; border: 1px solid #ffffff18; }
+.mac-control-grid button svg { grid-row: span 2; width: 23px; height: 23px; }
+.mac-control-grid button span { font-size: 11px; font-weight: 600; }
+.mac-control-grid button small { font-size: 10px; color: var(--text-dim); }
+.mac-control-grid button[aria-pressed="true"] { background: #0a84ff; color: white; }
+.mac-control-grid button[aria-pressed="true"] small { color: #e7f0ff; }
+.glass-slider { display: block; margin: 14px 0; padding: 15px; background: #ffffff10; border: 1px solid #ffffff18; border-radius: 15px; }
+.glass-slider > span { display: flex; justify-content: space-between; font-size: 12px; font-weight: 550; }
+.glass-slider input { display: block; width: 100%; margin: 15px 0 10px; accent-color: #0a84ff; cursor: pointer; }
+.glass-slider small { color: var(--text-dim); font-size: 10px; font-weight: 400; }
+.mac-settings-link { width: 100%; text-align: right; padding: 4px 3px; font-size: 11px; }
+.mac-settings-link:hover { text-decoration: underline; }
+
+@media (max-height:780px) and (min-width:901px) {
+  .desktop-widgets { top: 8px; width: 215px; gap: 12px; }
+  .widget { padding: 15px; border-radius: 20px; }
+  .desktop-icons { gap: 10px; }
+}
+@media (max-width:1100px) {
+  .desktop-widgets { width: 210px; left: 18px; }
+  .desktop-icons { right: 12px; }
+  .space-tabs { left: 59%; }
+  .mac-menus { gap: 0; }
+  .mac-menus button { padding: 6px; }
+  .system-bar { gap: 10px; }
+}
+@media (max-width:900px) {
+  .space-tabs { display: none; }
+  .system-actions { margin-left: auto; }
+  #active-app { display: block; }
+  .desktop-widgets { width: 190px; }
+  .widget-quick-note { display: none; }
+  .desktop-icons { max-width: 76px; }
+  .dock-item, .dock-item:hover { width: 44px; height: 46px; }
+  .dock-item .g { width: 42px; height: 42px; }
+  .dock-items { gap: 5px; }
+  .orbit-planet { --planet-size: 63vw; left: calc(59% - var(--planet-size) / 2); }
+}
+@media (max-width:700px) {
+  .system-bar { padding: 0 14px; }
+  .mac-menus { display: none; }
+  .system-actions { gap: 10px; }
+  #active-app { font-size: 12px; }
+  .desktop { display: block !important; overflow: hidden; inset: 44px 0 110px; }
+  .desktop-home { display: none; }
+  .desktop-widgets { position: absolute; left: 18px; right: auto; top: 12px; width: 164px; margin: 0; display: block; }
+  .orbit-today { display: block; padding: 15px; border-radius: 22px; }
+  .orbit-today #orbit-time { font-size: 36px; margin-top: 7px; }
+  .orbit-today #orbit-date { font-size: 9px; }
+  .week-strip, .day-agenda, .orbit-focus, .widget-quick-note { display: none; }
+  .desktop-icons { display: flex; top: 10px; right: 12px; left: auto; gap: 8px; max-width: 65px; }
+  .desktop-icon { width: 65px; height: 65px; padding: 4px; gap: 4px; }
+  .desktop-icon-glyph { width: 37px; height: 37px; border-radius: 10px; }
+  .desktop-icon-label { font-size: 9px; }
+  .orbit-planet { --planet-size: 83vw; left: 2%; top: 36%; }
+  .orbit-ring { width: 135vw; height: 52vw; left: -29%; top: 44%; }
+  .ring-two { left: -30%; top: 43%; width: 137vw; height: 54vw; }
+  .ring-three { left: -34%; top: 41%; width: 145vw; height: 61vw; }
+  .orbit-moon { left: 12%; top: 71%; }
+  .desktop-bottom { bottom: 98px; left: 20px; right: 20px; }
+  .wallpaper-picker { margin: 0 auto; }
+  .dock { bottom: 15px; padding: 8px; height: 65px; border-radius: 22px; gap: 5px; }
+  .dock-item, .dock-item:hover { width: 39px; height: 42px; }
+  .dock-item .g { width: 37px; height: 37px; border-radius: 10px; }
+  .dock-item .g svg { width: 24px; height: 24px; }
+  .dock-items { gap: 3px; }
+  #dock-pinned { max-width: calc(100vw - 120px); overflow: auto; }
+  .dock-running { max-width: 43px; overflow: auto; scrollbar-width: none; }
+  .mac-control-center { right: 9px; width: min(325px, calc(100vw - 18px)); }
+}
+@media (prefers-reduced-motion:reduce) { .dock-item { transform: none !important; } }
+:root[data-reduce-motion="true"] .dock-item { transform: none !important; }

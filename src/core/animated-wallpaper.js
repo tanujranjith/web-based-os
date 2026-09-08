@@ -98,7 +98,7 @@ export const animatedWallpaper = {
   },
   apply() {
     const prefs = store.get().prefs;
-    if (prefs.reduceMotion || !prefs.animatedWallpaper) this.stop();
+    if (prefs.reduceMotion || window.matchMedia('(prefers-reduced-motion: reduce)').matches || !prefs.animatedWallpaper) this.stop();
     else this.start();
   },
 };

@@ -8,6 +8,12 @@ import { bus } from "./core/event-bus.js";
 import { profiles } from "./core/profiles.js";
 import { animatedWallpaper } from "./core/animated-wallpaper.js";
 import { sound } from "./core/sound.js";
+import { installIcons } from "./ui/icons.js";
+import { initOrbit } from "./ui/orbit.js";
+import Board from "./apps/board.js";
+import Calendar from './apps/calendar.js';
+import Studio from './apps/studio.js';
+import { initDesktopPlus } from './ui/desktop-plus.js';
 
 import { initDesktop } from "./ui/desktop.js";
 import { initDock } from "./ui/dock.js";
@@ -25,7 +31,7 @@ import Tasks from "./apps/tasks.js";
 import About from "./apps/about.js";
 import Calculator from "./apps/calculator.js";
 import Clock from "./apps/clock.js";
-import Pomodoro from "./apps/pomodoro.js";
+import Pomodoro from "./apps/focus.js";
 import CodeEditor from "./apps/code-editor.js";
 import Markdown from "./apps/markdown.js";
 import ImageViewer from "./apps/image-viewer.js";
@@ -42,8 +48,9 @@ import Minesweeper from "./apps/minesweeper.js";
   Calculator, Clock, Pomodoro,
   CodeEditor, Markdown,
   ImageViewer, Paint, PdfViewer, Camera, Music,
-  Snake, Game2048, Minesweeper,
+  Snake, Game2048, Minesweeper, Board, Calendar, Studio,
 ].forEach((a) => registry.register(a));
+installIcons(registry);
 
 bus.on("open-app", ({ id, opts }) => manager.open(id, opts));
 
@@ -90,6 +97,8 @@ function boot() {
   safeInit("notifications", initNotifications);
   safeInit("palette", initPalette);
   safeInit("shortcuts", installShortcuts);
+  safeInit("orbit", initOrbit);
+  safeInit('desktop-plus', initDesktopPlus);
   safeInit("animatedWallpaper", () => animatedWallpaper.apply());
   safeInit("lockScreen", () => lockScreen.showIfLocked());
 

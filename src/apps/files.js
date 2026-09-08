@@ -212,6 +212,7 @@ export default {
     render();
 
     return {
+      onOpen(opts) { if (opts.path && fs.isDir(opts.path)) { cwd = opts.path; selected = null; render(); } },
       unmount() { unsub(); el.remove(); },
     };
   },

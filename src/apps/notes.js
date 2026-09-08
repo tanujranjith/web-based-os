@@ -84,6 +84,7 @@ export default {
     };
 
     const select = (id) => {
+      flushSave();
       const n = notes().find((x) => x.id === id);
       if (!n) return;
       activeId = id;
@@ -103,6 +104,7 @@ export default {
     };
 
     const openFsFile = (path) => {
+      flushSave();
       const node = fs.read(path);
       if (!node) return;
       importedFsPath = path;
@@ -129,9 +131,10 @@ export default {
       renderList();
     };
 
-    const scheduleSave = () => {
+    const flushSave = () => {
+      if (!saveTimer) return;
       clearTimeout(saveTimer);
-      saveTimer = setTimeout(() => {
+      saveTimer = null;
         if (importedFsPath) {
           fs.write(importedFsPath, $body.value);
         } else if (activeId) {
@@ -143,16 +146,21 @@ export default {
             n.modifiedAt = Date.now();
           });
         }
-        renderList();
-      }, 220);
+    };
+    const scheduleSave = () => {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => { flushSave(); renderList(); }, 220);
     };
 
     $title.addEventListener("input", scheduleSave);
+    const saveOnHide = () => { flushSave(); store.flush(); };
+    window.addEventListener('pagehide', saveOnHide);
     $body.addEventListener("input", scheduleSave);
     $search.addEventListener("input", renderList);
     $new.addEventListener("click", () => create());
 
-    const onShortcutNew = bus.on("shortcut-new", () => create());
+    const onShortcutNew = bus.on("shortcut-new", () => { if (!el.closest('.window').classList.contains('unfocused') && !el.closest('.window').classList.contains('workspace-hidden')) create(); });
+    const onSelect = bus.on("notes-select", ({ id }) => select(id));
     const onOpenFsFile = bus.on("notes-open-file", ({ path }) => openFsFile(path));
 
     // initial selection — open from FS or create new
@@ -168,7 +176,11 @@ export default {
     renderList();
 
     return {
+      onOpen(opts) { if (opts.newNote) create(); else if (opts.openFsFile) openFsFile(opts.openFsFile); },
       unmount() {
+        window.removeEventListener('pagehide', saveOnHide);
+        flushSave();
+        onSelect?.();
         onShortcutNew?.();
         onOpenFsFile?.();
         clearTimeout(saveTimer);

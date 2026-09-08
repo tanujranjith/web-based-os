@@ -4,8 +4,8 @@ import { registry } from "../core/app-registry.js";
 import { manager } from "../core/window-manager.js";
 
 const OS_NAME = "NovaOS";
-const OS_VERSION = "1.0.0 (Aurora)";
-const CODENAME = "Aurora";
+const OS_VERSION = "3.0.0 (Orbit)";
+const CODENAME = "Orbit";
 
 export default {
   id: "about",
@@ -22,7 +22,7 @@ export default {
     const browser = detectBrowser(ua);
     const totals = fs.countAll("/");
     let storage = "—";
-    try { storage = (new Blob([localStorage.getItem("novaos:v1") || ""]).size / 1024).toFixed(1) + " KB"; } catch {}
+    try { storage = (new Blob([JSON.stringify(store.get())]).size / 1024).toFixed(1) + " KB"; } catch {}
     const apps = registry.all().length;
 
     el.innerHTML = `

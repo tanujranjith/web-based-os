@@ -10,8 +10,8 @@ const defaultState = () => {
     user: { name: p.name, avatar: p.avatar },
     prefs: {
       theme: "dark",
-      accent: "#5b8def",
-      wallpaper: "aurora",
+      accent: "#a8c78d",
+      wallpaper: "orbit",
       dockStyle: "floating",
       reduceMotion: false,
       largeText: false,
@@ -26,6 +26,8 @@ const defaultState = () => {
     fs: null,
     notes: [],
     tasks: [],
+    board: [],
+    events: [],
     paint: [],
   };
 };
@@ -49,6 +51,7 @@ function deepMerge(target, src) {
   if (!src || typeof src !== "object") return target;
   const out = Array.isArray(target) ? [...target] : { ...target };
   for (const k of Object.keys(src)) {
+    if (['__proto__', 'prototype', 'constructor'].includes(k)) continue;
     const v = src[k];
     if (v && typeof v === "object" && !Array.isArray(v) && target[k] && typeof target[k] === "object" && !Array.isArray(target[k])) {
       out[k] = deepMerge(target[k], v);
@@ -89,6 +92,21 @@ export const store = {
     state[key] = value;
     scheduleSave();
     bus.emit("state-change", state);
+  },
+
+  /** Validate and restore an older or current backup into the active profile. */
+  restore(snapshot) {
+    if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot) || snapshot.version !== 1) throw new Error('This is not a supported NovaOS backup.');
+    for (const key of ['notes','tasks','board','events','desktopShortcuts','recent','notifications']) {
+      if (snapshot[key] !== undefined && !Array.isArray(snapshot[key])) throw new Error(`Invalid backup field: ${key}`);
+    }
+    if (snapshot.prefs && (typeof snapshot.prefs !== 'object' || Array.isArray(snapshot.prefs))) throw new Error('Invalid preferences in backup.');
+    const next = deepMerge(defaultState(), snapshot);
+    // Persist before replacing the live state, so a full disk leaves it intact.
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    clearTimeout(saveTimer);
+    state = next;
+    bus.emit('state-change', state);
   },
 
   /** Wipe all persisted data for the active profile */

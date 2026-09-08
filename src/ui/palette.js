@@ -68,6 +68,9 @@ function actions() {
   }));
 
   const cmds = [
+    { kind: 'Action', label: 'Toggle Do Not Disturb', icon: '☾', run: () => store.update(s=>{s.prefs.doNotDisturb=!s.prefs.doNotDisturb;}) },
+    { kind: 'Action', label: 'New calendar event', icon: '▦', run: () => manager.open('calendar',{newEvent:true}) },
+    { kind: 'Action', label: 'Reset globe orientation', icon: '◎', run: () => bus.emit('globe-reset') },
     { kind: "Action", label: "Toggle theme", icon: "🌗", run: () => theme.setTheme(store.get().prefs.theme === "dark" ? "light" : "dark") },
     { kind: "Action", label: "Toggle reduce motion", icon: "🌀", run: () => theme.toggleReduceMotion() },
     { kind: "Action", label: "Toggle larger text", icon: "🔠", run: () => theme.toggleLargeText() },
@@ -81,7 +84,8 @@ function actions() {
     { kind: "Action", label: "Reset NovaOS…", icon: "♻", run: () => { if (confirm("Wipe local data for this profile?")) { store.reset(); setTimeout(() => location.reload(), 200); } } },
   ].map((a, i) => ({ ...a, id: "cmd-" + i, sub: "Action", keywords: a.label }));
 
-  return [...cmds, ...apps, ...files, ...notes, ...tasks];
+  const events=(store.get().events||[]).map(event=>({kind:'Event',id:'event-'+event.id,label:event.title,sub:`${event.date} ${event.time||'All day'}`,icon:'▦',keywords:`${event.title} ${event.details} ${event.date}`,run:()=>manager.open('calendar',{date:event.date})}));
+  return [...cmds, ...apps, ...files, ...notes, ...tasks, ...events];
 }
 
 function listAllFiles() {

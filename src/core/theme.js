@@ -2,6 +2,10 @@ import { store } from "./state.js";
 import { bus } from "./event-bus.js";
 
 export const wallpapers = {
+  orbit: {
+    name: "Orbit",
+    css: "radial-gradient(ellipse at 72% 20%, #aa9fea88, transparent 48%), radial-gradient(ellipse at 30% 88%, #6a91edbb, transparent 52%), linear-gradient(145deg, #141f54, #475b99 50%, #9887c8)",
+  },
   aurora: {
     name: "Aurora",
     css: "radial-gradient(1100px 700px at 25% 30%, #6f86ff 0%, transparent 60%), radial-gradient(900px 600px at 80% 70%, #c47cff 0%, transparent 55%), linear-gradient(160deg, #0e1530 0%, #19082a 100%)",
@@ -33,6 +37,7 @@ export const wallpapers = {
 };
 
 export const accents = [
+  "#a8c78d",
   "#5b8def", "#7c5cff", "#ff5c8a", "#ff8a3d",
   "#22c55e", "#0ea5b7", "#eab308", "#a3a3a3",
 ];
@@ -52,6 +57,7 @@ export const theme = {
     const wp = wallpapers[prefs.wallpaper] || wallpapers.aurora;
     const wpEl = document.getElementById("wallpaper");
     if (wpEl) wpEl.style.background = wp.css;
+    document.documentElement.dataset.wallpaper = prefs.wallpaper;
 
     const dock = document.getElementById("dock");
     if (dock) dock.dataset.style = prefs.dockStyle || "floating";
