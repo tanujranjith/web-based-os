@@ -1,27 +1,42 @@
-const VERSION = "novaos-v3-orbit";
-
-self.addEventListener("install", (e) => { self.skipWaiting(); });
-
-self.addEventListener("activate", (e) => {
-  e.waitUntil(
-    caches.keys().then((keys) => Promise.all(keys.filter((k) => k.startsWith('novaos-') && k !== VERSION).map((k) => caches.delete(k))))
-      .then(() => self.clients.claim())
-  );
+const VERSION = "novaos-4.0.0";
+self.addEventListener("install", (event) =>
+  event.waitUntil(
+    (async () => {
+      const assets = await (
+        await fetch("./precache.json", { cache: "no-store" })
+      ).json();
+      const cache = await caches.open(VERSION);
+      await cache.addAll(assets);
+    })(),
+  ),
+);
+self.addEventListener("activate", (event) =>
+  event.waitUntil(
+    (async () => {
+      await Promise.all(
+        (await caches.keys())
+          .filter((k) => k.startsWith("novaos-") && k !== VERSION)
+          .map((k) => caches.delete(k)),
+      );
+      await self.clients.claim();
+    })(),
+  ),
+);
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "ACTIVATE") {
+    event.waitUntil(self.skipWaiting());
+  }
 });
-
-// Network-first with cache fallback. Avoids the "stale module" trap during development.
-self.addEventListener("fetch", (e) => {
-  const req = e.request;
-  if (req.method !== "GET") return;
-  const url = new URL(req.url);
-  if (url.origin !== location.origin) return;
-  e.respondWith(
-    fetch(req).then((res) => {
-      if (res && res.ok) {
-        const copy = res.clone();
-        caches.open(VERSION).then((c) => c.put(req, copy)).catch(() => {});
-      }
-      return res;
-    }).catch(() => caches.match(req))
+// A single cache version serves the entire module graph, including offline apps.
+self.addEventListener("fetch", (event) => {
+  const url = new URL(event.request.url);
+  if (event.request.method !== "GET" || url.origin !== location.origin) return;
+  event.respondWith(
+    (async () => {
+      const cache = await caches.open(VERSION);
+      const cached = await cache.match(event.request, { ignoreSearch: true });
+      if (cached) return cached;
+      return fetch(event.request);
+    })(),
   );
 });

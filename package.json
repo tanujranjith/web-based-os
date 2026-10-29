@@ -1,13 +1,38 @@
 {
   "name": "novaos-orbit",
-  "version": "3.0.0",
+  "version": "4.0.0",
   "private": true,
   "type": "module",
-  "description": "A local-first web desktop with 23 apps, Calendar, Desktop Studio, and three workspaces.",
+  "description": "A local-first browser desktop with persistent workspaces, shared projects and 23 apps.",
   "scripts": {
     "start": "node scripts/serve.mjs",
     "check": "node scripts/check.mjs",
-    "test": "node --test"
+    "test": "node --test",
+    "build": "node scripts/build.mjs",
+    "test:e2e": "node scripts/e2e.mjs"
   },
-  "engines": { "node": ">=20" }
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@codemirror/commands": "6.11.1",
+    "@codemirror/lang-css": "6.3.1",
+    "@codemirror/lang-html": "6.4.12",
+    "@codemirror/lang-javascript": "6.2.5",
+    "@codemirror/lang-json": "6.0.2",
+    "@codemirror/language": "6.13.1",
+    "@codemirror/search": "6.7.2",
+    "@codemirror/state": "6.7.6",
+    "@codemirror/view": "6.43.15",
+    "dompurify": "3.4.17",
+    "marked": "18.1.2",
+    "pdfjs-dist": "6.4.299"
+  },
+  "devDependencies": {
+    "@sparticuz/chromium": "153.0.0",
+    "esbuild": "0.28.2",
+    "fake-indexeddb": "6.2.6",
+    "playwright": "1.64.1",
+    "prettier": "3.9.10"
+  }
 }

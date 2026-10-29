@@ -1,3 +1,4 @@
+import { deleteProfile } from "./persistence.js";
 /**
  * Multi-profile support. Each profile has its own namespaced localStorage key
  * (`novaos:v1:<id>`). A separate index key (`novaos:profiles`) stores the list
@@ -28,7 +29,8 @@ function load() {
         try {
           const parsed = JSON.parse(legacy);
           if (parsed?.user?.name) fresh.profiles[0].name = parsed.user.name;
-          if (parsed?.user?.avatar) fresh.profiles[0].avatar = parsed.user.avatar;
+          if (parsed?.user?.avatar)
+            fresh.profiles[0].avatar = parsed.user.avatar;
           localStorage.setItem(`novaos:v1:${fresh.profiles[0].id}`, legacy);
         } catch {}
       }
@@ -44,19 +46,35 @@ function load() {
 }
 
 function save(index) {
-  try { localStorage.setItem(INDEX_KEY, JSON.stringify(index)); } catch {}
+  try {
+    localStorage.setItem(INDEX_KEY, JSON.stringify(index));
+  } catch {}
 }
 
-function uid() { return Math.random().toString(36).slice(2, 10); }
+function uid() {
+  return Math.random().toString(36).slice(2, 10);
+}
 
 let index = load();
 
 export const profiles = {
-  index() { return index; },
-  list() { return index.profiles.slice(); },
-  active() { return index.profiles.find((p) => p.id === index.activeId) || index.profiles[0]; },
-  storageKey() { return `novaos:v1:${index.activeId}`; },
-  isLocked() { return !!index.locked; },
+  index() {
+    return index;
+  },
+  list() {
+    return index.profiles.slice();
+  },
+  active() {
+    return (
+      index.profiles.find((p) => p.id === index.activeId) || index.profiles[0]
+    );
+  },
+  storageKey() {
+    return `novaos:v1:${index.activeId}`;
+  },
+  isLocked() {
+    return !!index.locked;
+  },
 
   switchTo(id) {
     if (!index.profiles.some((p) => p.id === id)) return false;
@@ -76,24 +94,36 @@ export const profiles = {
 
   rename(id, name) {
     const p = index.profiles.find((x) => x.id === id);
-    if (p) { p.name = name; save(index); }
+    if (p) {
+      p.name = name;
+      save(index);
+    }
   },
 
   setAvatar(id, avatar) {
     const p = index.profiles.find((x) => x.id === id);
-    if (p) { p.avatar = avatar; save(index); }
+    if (p) {
+      p.avatar = avatar;
+      save(index);
+    }
   },
 
   setPin(id, pin) {
     const p = index.profiles.find((x) => x.id === id);
-    if (p) { p.pin = String(pin || ""); save(index); }
+    if (p) {
+      p.pin = String(pin || "");
+      save(index);
+    }
   },
 
   remove(id) {
     if (index.profiles.length <= 1) return false;
     index.profiles = index.profiles.filter((p) => p.id !== id);
     if (index.activeId === id) index.activeId = index.profiles[0].id;
-    try { localStorage.removeItem(`novaos:v1:${id}`); } catch {}
+    deleteProfile(`novaos:v1:${id}`).catch(console.error);
+    try {
+      localStorage.removeItem(`novaos:v1:${id}`);
+    } catch {}
     save(index);
     return true;
   },

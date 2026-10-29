@@ -4,7 +4,7 @@ import { registry } from "../core/app-registry.js";
 import { manager } from "../core/window-manager.js";
 
 const OS_NAME = "NovaOS";
-const OS_VERSION = "3.0.0 (Orbit)";
+const OS_VERSION = "4.0.0";
 const CODENAME = "Orbit";
 
 export default {
@@ -22,7 +22,11 @@ export default {
     const browser = detectBrowser(ua);
     const totals = fs.countAll("/");
     let storage = "—";
-    try { storage = (new Blob([JSON.stringify(store.get())]).size / 1024).toFixed(1) + " KB"; } catch {}
+    try {
+      storage =
+        (new Blob([JSON.stringify(store.get())]).size / 1024).toFixed(1) +
+        " KB";
+    } catch {}
     const apps = registry.all().length;
 
     el.innerHTML = `
@@ -55,17 +59,23 @@ export default {
     `;
     container.appendChild(el);
 
-    el.querySelector('[data-act="settings"]').addEventListener("click", () => manager.open("settings"));
-    el.querySelector('[data-act="terminal"]').addEventListener("click", () => manager.open("terminal"));
+    el.querySelector('[data-act="settings"]').addEventListener("click", () =>
+      manager.open("settings"),
+    );
+    el.querySelector('[data-act="terminal"]').addEventListener("click", () =>
+      manager.open("terminal"),
+    );
     el.querySelector('[data-act="reset"]').addEventListener("click", () => {
       if (confirm("This wipes all local data. Continue?")) {
         store.reset();
-        setTimeout(() => location.reload(), 200);
+        store.flush().then(() => location.reload());
       }
     });
 
     return {
-      unmount() { el.remove(); },
+      unmount() {
+        el.remove();
+      },
     };
   },
 };
@@ -77,4 +87,12 @@ function detectBrowser(ua) {
   if (/safari/i.test(ua)) return "Safari";
   return "Web";
 }
-function escape(s) { return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+function escape(s) {
+  return String(s).replace(
+    /[&<>"']/g,
+    (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        c
+      ],
+  );
+}

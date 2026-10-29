@@ -1,140 +1,105 @@
-<p align="center"><img src="./icon.svg" width="80" height="80" alt="NovaOS icon" /></p>
+# NovaOS 4
 
-<h1 align="center">NovaOS · Orbit</h1>
+A local-first desktop for the browser. Files, notes, projects, development tools, and media share one workspace, with 23 built-in apps and three customizable spaces.
 
-<p align="center">A little space for big ideas. A desktop environment that lives in your browser.</p>
+## Run locally
 
-<p align="center"><strong>23 built-in apps · 3 workspaces · Local-first · Vanilla JavaScript</strong></p>
-
-NovaOS brings a macOS-inspired glass desktop, movable windows, a virtual filesystem, and everyday tools together in one static web app. Spin the interactive globe, plan your week, capture an idea, or settle into a focus session—without an account or backend.
-
-This is a browser-based desktop simulation, not a native operating system. It is an independent project, not affiliated with Apple.
-
-## Quick start
-
-Requires **Node.js 20 or later**. There are no npm dependencies to install and no build step.
+Requires Node.js 22 or later.
 
 ```sh
-git clone https://github.com/tanujranjith/web-based-os.git
-cd web-based-os
+npm ci
+npm run build
 npm start
 ```
 
-Open [localhost:4187](http://127.0.0.1:4187). The development server binds to `127.0.0.1`, so it is available only on your machine by default.
+Open http://127.0.0.1:4187. The build bundles CSS, CodeMirror, and the Markdown renderer, copies PDF.js and its worker/fonts, and prepares `dist/`. Dependencies are served locally; the app does not load libraries from third-party CDNs.
 
-Any static HTTP server can serve the project. Opening `index.html` directly with `file://` is unsupported because the app uses ES modules.
+## What changed in version 4
 
-## Take a quick tour
+| Area         | Behavior                                                                                                                                                                                                                    |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Desktop      | Consistent surfaces, typography, controls and icons; light/dark appearance; compact density; calmer default wallpaper; optional Orbit wallpaper and globe                                                                   |
+| Windows      | Multiple Files, Code, PDF, Images and Terminal windows; session restoration; persistent workspace placement; snapping and floating restoration; adjustable paired splits; saved layouts; dock previews; mobile app switcher |
+| Widgets      | Move widgets with their grip; resize positioned widgets from the bottom-right corner; reset positions from Saved layouts                                                                                                    |
+| Files        | Grid/list views, search/sort, previews, multiselect, copy/cut/paste, move/duplicate, drag-and-drop import/move, downloads, Trash and restore                                                                                |
+| Notes        | Folders, tags, document tabs, Markdown formatting/read mode, linked file attachments, export, automatic saving                                                                                                              |
+| Projects     | Tasks and Board share records; priorities, due dates, projects, descriptions and subtasks; tasks also appear on Calendar                                                                                                    |
+| Calendar     | Month/week/agenda, draggable events and due tasks, daily/weekly/monthly recurrence with optional end date                                                                                                                   |
+| Focus        | Link a task, run persistent sessions, review completed session history                                                                                                                                                      |
+| Code         | Locally bundled CodeMirror, tabs, file tree, search/replace, syntax highlighting, recovery drafts and isolated live previews                                                                                                |
+| PDF          | Locally bundled PDF.js, page navigation, zoom/fit, thumbnails, text search and saved reading position                                                                                                                       |
+| Images/Paint | Image pan/zoom/rotate/crop with save-copy; pointer drawing, shapes, undo/redo, automatic draft and PNG export                                                                                                               |
+| Music        | Imported audio, queues, playlists, shuffle/repeat, remembered track/position, desktop controls and browser Media Session integration                                                                                        |
+| Camera       | Camera/device selection after permission, mirror, capture, review and save to Pictures                                                                                                                                      |
+| Browser      | Saved tabs, navigation history, bookmarks, external-open action and embedding limitations shown in the interface                                                                                                            |
+| Terminal     | Virtual filesystem commands, copy/move, filename search, Trash restore, autocomplete and saved history                                                                                                                      |
+| Calculator   | Scientific functions, angle mode, factorial/powers, safe expression parser, saved history                                                                                                                                   |
+| Games        | Shared visual styling, saved profile scores, Snake speed/touch controls, Minesweeper touch flag mode and best times, resumable 2048                                                                                         |
+| Offline      | Versioned service-worker precache of bundled apps/assets; update prompt instead of immediately replacing running code                                                                                                       |
 
-1. **Make it yours.** Select **Customize desktop** at the bottom left to open Desktop Studio.
-2. **Move the universe.** Drag the globe sideways to spin or vertically to tilt. Double-click to reset.
-3. **Find your tools.** Open the Dock launcher for all apps, or press **Ctrl / Cmd + K** to search apps, files, notes, tasks, events, and commands.
-4. **Make room.** Switch between Personal, Studio, and Focus using the menu bar. Window overview lets you move apps between spaces.
-5. **Plan something good.** Click the date in the Today widget to open Calendar, or launch Project Board to organize your next project.
+## Data and migration
 
-## A desktop you can shape
+Each browser-local profile stores application state in IndexedDB. Imported binary file contents are stored as blobs. Small profile selection and lock preferences remain in localStorage. Existing version 3 profile data migrates on startup; the legacy profile key is removed only after an IndexedDB transaction succeeds. Existing Board cards migrate into shared task records once.
 
-### Glass, motion, and atmosphere
+The working file tree is kept in memory while the app is open and hydrated from IndexedDB at startup. Saves are asynchronous and serialized. Save status appears on the desktop. An unsaved-change browser prompt protects pending writes when leaving the page.
 
-- Translucent windows, traffic-light controls, working application menus, colorful icons, and a magnifying Dock.
-- **Desktop Studio:** eight wallpapers, four globe materials, globe scaling, automatic orbit, orbital-ring visibility, and widget toggles.
-- **Interactive globe:** two-axis drag rotation with release momentum. Arrow keys rotate, Shift increases the step, and Home resets. Reduced motion disables automatic rotation and momentum.
-- **Control Center:** persistent glass tint, light/dark appearance, sound controls, reduced motion, and quick access to the focus timer.
-- Calendar, focus, and scratchpad widgets, plus a recent-app shelf. Hide what you do not need.
+**Settings → System → Export** downloads a JSON backup containing the current profile, including file contents. Import validates the backup before replacing that profile. Export before changing domains or browsers, clearing site data, or performing a reset. Browser storage remains subject to browser quota and retention policies. Profiles and the convenience lock screen do not encrypt your content.
 
-### Space for your work
+The `clear.html` recovery page can refresh the service-worker cache without erasing user files. Its separate destructive action clears IndexedDB and localStorage after confirmation; close other NovaOS tabs before using it.
 
-- Three workspaces: **Personal**, **Studio**, and **Focus**.
-- Drag, resize, minimize, and maximize app windows. Use the title-bar layout button for halves, quarters, full-screen fill, or restoring a floating window.
-- Window overview supports app switching, moving apps between spaces, and tiling the current workspace.
-- Categorized launcher and global search, with keyboard navigation in application menus.
-- **Do Not Disturb** keeps incoming notifications in Notification Center without banners or sounds.
+## Shortcuts
 
-### Tools that remember
+| Shortcut                 | Action                                                |
+| ------------------------ | ----------------------------------------------------- |
+| Ctrl/Cmd + Space         | App launcher                                          |
+| Ctrl/Cmd + K             | Search apps, files, notes, tasks, events and commands |
+| Ctrl/Cmd + Shift + O     | Window overview                                       |
+| Ctrl/Cmd + Shift + 1/2/3 | Switch workspace                                      |
+| Ctrl/Cmd + Shift + D     | Show desktop                                          |
+| Ctrl/Cmd + backtick      | Cycle open windows                                    |
+| Shift-click a dock icon  | New window for supported apps                         |
+| Ctrl/Cmd + S             | Save in Code                                          |
+| Ctrl/Cmd + F             | Find in Code                                          |
+| Ctrl/Cmd + A/C/X/V       | Select/copy/cut/paste in Files                        |
+| F2 / Delete              | Rename / move to Trash in Files                       |
 
-- **Calendar:** month navigation, timed and all-day events, Personal/Work/Important categories, details, editing, and confirmed deletion. Events appear in search and the Today widget.
-- **Project Board:** cards with descriptions and priorities, search, drag-and-drop columns, and keyboard-accessible status controls.
-- **Pomodoro:** persistent focus sessions, pause/resume, skip, reset, short and long breaks, and deadline recovery after refresh. The timer continues when its app window closes.
-- Notes, tasks, files, and preferences are stored locally for the active profile. Notes flush pending edits when their window closes.
+Browser and operating-system shortcuts may take precedence. Visible alternatives are available.
 
-## App catalog
-
-| Collection | Apps |
-| --- | --- |
-| Productivity | Notes, Tasks, Calendar, Project Board, Pomodoro |
-| Workspace & system | Files, Browser, Terminal, Settings, Desktop Studio, About |
-| Utilities & development | Calculator, Clock, Code Editor, Markdown |
-| Creative & media | Image Viewer, Paint, PDF Viewer, Camera, Music |
-| Games | Snake, 2048, Minesweeper |
-
-## Keyboard shortcuts
-
-| Shortcut | Action |
-| --- | --- |
-| Ctrl / Cmd + Space | Open the launcher |
-| Ctrl / Cmd + K | Search content, apps, and commands |
-| Ctrl / Cmd + Shift + O | Open window overview |
-| Ctrl / Cmd + Shift + 1 / 2 / 3 | Switch workspace |
-| Ctrl / Cmd + Shift + D | Show the desktop |
-| Ctrl / Cmd + M | Minimize the focused window |
-| Ctrl / Cmd + , | Open Settings |
-| Escape | Dismiss overlays |
-| Arrow keys / Shift + Arrow keys | Rotate the focused globe / use a larger step |
-| Home | Reset the focused globe |
-
-Browser and operating-system shortcuts can take precedence. Visible controls are available for launcher, search, workspace, and window actions.
-
-## Your data, on your device
-
-NovaOS stores app content and preferences in browser storage for the **active profile and origin**. There is no server-side sync. Using another browser, hostname, protocol, or port creates a separate storage area.
-
-- **Back up:** open **Settings → System → Export** to download your current profile's data.
-- **Restore:** use **Settings → System → Import**. Import replaces the current profile's data after confirmation; export first if you want to keep it.
-- Clearing site data removes local content. Private browsing, storage limits, and browser cleanup policies can also affect persistence.
-- Workspace membership is session-only. App geometry, content, and supported preferences persist.
-- Browser-local profiles are a convenience, not an operating-system security boundary. Do not treat local browser storage as an encrypted vault.
-
-Calendar is a local planner, not a cloud calendar or background reminder service. Focus completion notifications appear while NovaOS is running, or when it is reopened after a deadline.
-
-### Offline and browser limitations
-
-The service worker uses network-first loading with a cache fallback. Successfully loaded resources can be reused offline; an uncached app or external resource may still need a connection.
-
-External websites may block embedding in the Browser app. Camera access requires browser permission and a supported secure context, such as HTTPS or localhost. Media support depends on the browser. Extensions that alter page colors can override NovaOS's appearance; the app provides its own light/dark controls.
-
-## Development
-
-Built with **HTML, CSS, and native JavaScript modules**. No frontend framework, bundler, database, or application server is required.
-
-```text
-index.html              Desktop shell and stylesheet entry points
-src/main.js             App registration and startup
-src/core/               State, profiles, filesystem, window manager, timers
-src/ui/                 Dock, launcher, search, globe, menus, desktop widgets
-src/apps/               Built-in applications
-styles/                 Shared, app, and desktop styling
-scripts/serve.mjs       Local static development server
-scripts/check.mjs       Syntax and local-import validation
-tests/                  Node.js regression tests
-sw.js                   Network-first offline caching
-```
-
-### Run checks
+## Validation
 
 ```sh
+npm run build
 npm run check
 npm test
+npm run test:e2e
 ```
 
-The module check validates JavaScript syntax and relative imports. The **16 automated tests** cover calendar date/event validation and ordering, focus timer transitions and refresh recovery, and profile-safe backup restoration, including Calendar data and desktop preferences.
+Unit tests cover storage/blob round trips and profile isolation, backup validation and failure handling, filesystem copy/move/restore, recurring dates, timer transitions and calculator parsing. The Playwright suite starts its own local server and checks all app mounts, notes, shared tasks, file handoffs, code previews, PDF reading/search, media, image export, drawing, session restoration, mobile layout and offline loading. Screenshots are written to ignored `artifacts/`.
 
-Manual browser checks have covered globe dragging and customization, saved events, window snapping, app launching, project persistence, workspace movement, appearance controls, and desktop/mobile layouts. Browser checks are not part of `npm test`.
+On Linux the test helper uses the packaged Chromium executable with system fonts. On other platforms, install the browser once with `npx playwright install chromium`. Camera permission and physical device behavior still depend on the user's browser and hardware.
 
-### Add an app
+## Hosting
 
-1. Create a module in `src/apps/` exporting an app definition with `id`, `name`, and `mount(container, ctx)`. Existing apps show the optional category, keywords, default size, and lifecycle hooks.
-2. Register it in `src/main.js` and add its SVG icon to `src/ui/icons.js`.
-3. Keep profile data in the shared store, and release listeners or timers in the returned `unmount()` hook.
-4. Add tests where appropriate, run both checks, and verify the app in floating, snapped, and mobile-sized windows.
+`vercel.json` deploys `dist/` after `npm ci` and `npm run build`. Only public runtime assets are copied there; tests, tooling and dependencies are excluded from the deployed site. GitHub Actions runs the build, unit checks and browser workflows.
 
-For static hosting, serve the project root over HTTPS with its relative paths intact. There is no build output directory and no backend to deploy.
+## Browser boundaries
+
+NovaOS is a browser desktop simulation. It cannot execute native programs or provide an unrestricted system shell. The Browser app uses sandboxed iframes; websites can prohibit embedding and should be opened externally when needed. Code previews run in an iframe without same-origin access, with a restricted content policy. Markdown rendering is sanitized.
+
+There is no server-side account or cross-device synchronization. Music does not autoplay after a page refresh; press Play to resume the remembered track. Monthly recurring events on dates that do not exist in a month are skipped. Editing or dragging a repeating event changes the series. PDF thumbnails are generated for the first 30 pages, while all pages remain navigable and searchable. Camera requires HTTPS/localhost, permission and a supported device. Focus notifications require NovaOS to be running or reopened.
+
+## Project structure
+
+```text
+src/core/          Profile storage, filesystem, windows, shared tasks and media
+src/ui/            Desktop, menus, dialogs, search, widgets and dock
+src/apps/          Built-in applications
+src/vendor/        Build entry points for locally bundled dependencies
+styles/            Shared desktop and app styles; system.css combines them
+scripts/           Build, static server and browser verification
+ tests/            Node regression tests
+vercel.json        Static hosting configuration
+sw.js              Offline cache and update lifecycle
+```
+
+CodeMirror, PDF.js, Marked, DOMPurify and esbuild supply the editing, PDF, Markdown and build foundations. Exact dependency versions are recorded in `package-lock.json`.

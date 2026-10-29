@@ -38,7 +38,9 @@ export default {
     let activeSec = ctx.opts?.tab || "appearance";
 
     const renderSide = () => {
-      el.querySelectorAll(".sidebar-item").forEach((s) => s.classList.toggle("active", s.dataset.sec === activeSec));
+      el.querySelectorAll(".sidebar-item").forEach((s) =>
+        s.classList.toggle("active", s.dataset.sec === activeSec),
+      );
     };
 
     const render = () => {
@@ -49,7 +51,10 @@ export default {
     };
 
     el.querySelectorAll(".sidebar-item").forEach((s) => {
-      s.addEventListener("click", () => { activeSec = s.dataset.sec; render(); });
+      s.addEventListener("click", () => {
+        activeSec = s.dataset.sec;
+        render();
+      });
     });
 
     const renderers = {
@@ -79,9 +84,13 @@ export default {
           <div class="settings-row" style="flex-direction:column;align-items:stretch">
             <div class="label"><div class="title">Wallpaper</div><div class="desc">Pick a desktop background.</div></div>
             <div class="wallpaper-grid">
-              ${Object.entries(wallpapers).map(([k, v]) => `
+              ${Object.entries(wallpapers)
+                .map(
+                  ([k, v]) => `
                 <div class="wallpaper-thumb ${k === prefs.wallpaper ? "active" : ""}" data-wp="${k}" style="background:${v.css}" title="${v.name}"></div>
-              `).join("")}
+              `,
+                )
+                .join("")}
             </div>
           </div>
 
@@ -90,14 +99,28 @@ export default {
             <div class="toggle ${prefs.animatedWallpaper ? "on" : ""}" data-toggle="animatedWallpaper" role="switch" aria-checked="${prefs.animatedWallpaper}"></div>
           </div>
         `;
-        root.querySelector("#theme-sel").addEventListener("change", (e) => theme.setTheme(e.target.value));
-        root.querySelectorAll("[data-accent]").forEach((s) => s.addEventListener("click", () => { theme.setAccent(s.dataset.accent); render(); }));
-        root.querySelectorAll("[data-wp]").forEach((s) => s.addEventListener("click", () => { theme.setWallpaper(s.dataset.wp); render(); }));
+        root
+          .querySelector("#theme-sel")
+          .addEventListener("change", (e) => theme.setTheme(e.target.value));
+        root.querySelectorAll("[data-accent]").forEach((s) =>
+          s.addEventListener("click", () => {
+            theme.setAccent(s.dataset.accent);
+            render();
+          }),
+        );
+        root.querySelectorAll("[data-wp]").forEach((s) =>
+          s.addEventListener("click", () => {
+            theme.setWallpaper(s.dataset.wp);
+            render();
+          }),
+        );
         root.querySelectorAll("[data-toggle]").forEach((t) => {
           t.addEventListener("click", () => {
             const key = t.dataset.toggle;
             if (key === "animatedWallpaper") {
-              store.update((s) => { s.prefs.animatedWallpaper = !s.prefs.animatedWallpaper; });
+              store.update((s) => {
+                s.prefs.animatedWallpaper = !s.prefs.animatedWallpaper;
+              });
               animatedWallpaper.apply();
               render();
             }
@@ -118,7 +141,9 @@ export default {
           </div>
         `;
         root.querySelector("[data-toggle]").addEventListener("click", () => {
-          store.update((s) => { s.prefs.sounds = !s.prefs.sounds; });
+          store.update((s) => {
+            s.prefs.sounds = !s.prefs.sounds;
+          });
           render();
         });
         return root;
@@ -132,7 +157,9 @@ export default {
           <h2>Users</h2>
           <p class="pane-desc">Multiple profiles with separate data and (optionally) a PIN.</p>
           <div class="profiles-list">
-            ${list.map((p) => `
+            ${list
+              .map(
+                (p) => `
               <div class="profile-row">
                 <div class="lock-avatar" style="width:40px;height:40px;font-size:22px">${escape(p.avatar)}</div>
                 <div style="flex:1">
@@ -143,21 +170,38 @@ export default {
                 ${p.id !== active.id ? `<button class="btn primary" data-switch="${p.id}">Switch</button>` : ""}
                 ${list.length > 1 ? `<button class="btn danger" data-del="${p.id}">Delete</button>` : ""}
               </div>
-            `).join("")}
+            `,
+              )
+              .join("")}
           </div>
           <div class="settings-row" style="margin-top:14px">
             <button class="btn primary" id="new-profile">＋ Add user</button>
             <button class="btn" id="lock-now">🔒 Lock screen now</button>
           </div>
         `;
-        root.querySelectorAll("[data-switch]").forEach((b) => b.addEventListener("click", () => profiles.switchTo(b.dataset.switch)));
-        root.querySelectorAll("[data-del]").forEach((b) => b.addEventListener("click", () => { if (confirm("Delete this user and their data?")) { profiles.remove(b.dataset.del); render(); } }));
-        root.querySelectorAll("[data-pin]").forEach((b) => b.addEventListener("click", () => {
-          const pin = prompt("Set a 4–8 digit PIN (leave blank to clear):");
-          if (pin === null) return;
-          profiles.setPin(b.dataset.pin, pin);
-          render();
-        }));
+        root
+          .querySelectorAll("[data-switch]")
+          .forEach((b) =>
+            b.addEventListener("click", () =>
+              profiles.switchTo(b.dataset.switch),
+            ),
+          );
+        root.querySelectorAll("[data-del]").forEach((b) =>
+          b.addEventListener("click", () => {
+            if (confirm("Delete this user and their data?")) {
+              profiles.remove(b.dataset.del);
+              render();
+            }
+          }),
+        );
+        root.querySelectorAll("[data-pin]").forEach((b) =>
+          b.addEventListener("click", () => {
+            const pin = prompt("Set a 4–8 digit PIN (leave blank to clear):");
+            if (pin === null) return;
+            profiles.setPin(b.dataset.pin, pin);
+            render();
+          }),
+        );
         root.querySelector("#new-profile").addEventListener("click", () => {
           const name = prompt("Name for the new user:", "Friend");
           if (!name) return;
@@ -165,7 +209,9 @@ export default {
           profiles.create({ name, avatar });
           render();
         });
-        root.querySelector("#lock-now").addEventListener("click", () => bus.emit("lock"));
+        root
+          .querySelector("#lock-now")
+          .addEventListener("click", () => bus.emit("lock"));
         return root;
       },
 
@@ -189,9 +235,22 @@ export default {
             <button class="btn" id="reset-pins">Reset pins</button>
           </div>
         `;
-        root.querySelector("#dock-sel").addEventListener("change", (e) => theme.setDockStyle(e.target.value));
+        root
+          .querySelector("#dock-sel")
+          .addEventListener("change", (e) =>
+            theme.setDockStyle(e.target.value),
+          );
         root.querySelector("#reset-pins").addEventListener("click", () => {
-          store.update((s) => { s.desktopShortcuts = ["files", "notes", "code-editor", "browser", "terminal", "settings"]; });
+          store.update((s) => {
+            s.desktopShortcuts = [
+              "files",
+              "notes",
+              "code-editor",
+              "browser",
+              "terminal",
+              "settings",
+            ];
+          });
           bus.emit("notify", { title: "Dock", body: "Pinned apps reset." });
         });
         return root;
@@ -246,8 +305,12 @@ export default {
             s.user.avatar = root.querySelector("#avatar").value || "🙂";
           });
         };
-        root.querySelector("#name").addEventListener("input", debounce(save, 250));
-        root.querySelector("#avatar").addEventListener("input", debounce(save, 250));
+        root
+          .querySelector("#name")
+          .addEventListener("input", debounce(save, 250));
+        root
+          .querySelector("#avatar")
+          .addEventListener("input", debounce(save, 250));
         return root;
       },
 
@@ -271,29 +334,85 @@ export default {
             <input type="file" id="import-file" accept="application/json" hidden />
           </div>
         `;
-        root.querySelector("#reset").addEventListener("click", () => {
+        const extra = document.createElement("div");
+        extra.className = "system-extras";
+        extra.innerHTML = `<h3>Workspaces</h3>${store
+          .get()
+          .workspaceNames.map(
+            (name, i) =>
+              `<label>Space ${i + 1}<input class="input" data-space-name="${i}" value="${escape(name)}" maxlength="24"></label>`,
+          )
+          .join(
+            "",
+          )}<h3>Interface</h3><label>Density<select class="select" data-density><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select></label><p data-storage>Checking storage…</p><button class="btn" data-persist>Keep data on this device</button>`;
+        root.prepend(extra);
+        extra
+          .querySelectorAll("[data-space-name]")
+          .forEach(
+            (input) =>
+              (input.onchange = () =>
+                store.update(
+                  (s) =>
+                    (s.workspaceNames[+input.dataset.spaceName] =
+                      input.value.trim() ||
+                      `Space ${+input.dataset.spaceName + 1}`),
+                )),
+          );
+        extra.querySelector("[data-density]").value =
+          store.get().prefs.density || "comfortable";
+        extra.querySelector("[data-density]").onchange = (e) => {
+          store.update((s) => (s.prefs.density = e.target.value));
+          document.documentElement.dataset.density = e.target.value;
+        };
+        navigator.storage?.estimate().then(({ usage, quota }) => {
+          extra.querySelector("[data-storage]").textContent =
+            `Device storage: ${(usage / 1048576).toFixed(1)} MB used · ${(quota / 1073741824).toFixed(1)} GB quota`;
+        });
+        extra.querySelector("[data-persist]").onclick = async (e) => {
+          e.target.textContent = (await navigator.storage?.persist())
+            ? "Persistent storage granted"
+            : "Browser manages storage retention";
+        };
+        root.querySelector("#reset").addEventListener("click", async () => {
           if (confirm("Reset NovaOS and erase all local data?")) {
             store.reset();
+            await store.flush();
             setTimeout(() => location.reload(), 200);
           }
         });
-        root.querySelector("#export").addEventListener("click", () => {
+        root.querySelector("#export").addEventListener("click", async () => {
+          const { manager } = await import("../core/window-manager.js");
+          manager.list().forEach((r) => r.instance?.session?.());
+          await store.flush();
           const data = JSON.stringify(store.get(), null, 2);
           const blob = new Blob([data], { type: "application/json" });
           const url = URL.createObjectURL(blob);
           const a = document.createElement("a");
-          a.href = url; a.download = "novaos-export.json"; a.click();
+          a.href = url;
+          a.download =
+            "novaos-backup-" +
+            new Date().toISOString().replace(/[:.]/g, "-") +
+            ".json";
+          a.click();
           URL.revokeObjectURL(url);
         });
         const fileInput = root.querySelector("#import-file");
-        root.querySelector("#import").addEventListener("click", () => fileInput.click());
+        root
+          .querySelector("#import")
+          .addEventListener("click", () => fileInput.click());
         fileInput.addEventListener("change", async (e) => {
-          const f = e.target.files?.[0]; if (!f) return;
+          const f = e.target.files?.[0];
+          if (!f) return;
           try {
             const text = await f.text();
             const parsed = JSON.parse(text);
-            if (!confirm('Restore this backup? It replaces the current profile’s data.')) return;
-            store.restore(parsed);
+            if (
+              !confirm(
+                "Restore this backup? It replaces the current profile’s data.",
+              )
+            )
+              return;
+            await store.restore(parsed);
             bus.emit("notify", { title: "Import OK", body: "Reloading…" });
             setTimeout(() => location.reload(), 500);
           } catch (err) {
@@ -304,18 +423,40 @@ export default {
       },
     };
 
-    const unsubTheme = bus.on('theme-change', () => { if (['appearance','dock','accessibility'].includes(activeSec)) render(); });
+    const unsubTheme = bus.on("theme-change", () => {
+      if (["appearance", "dock", "accessibility"].includes(activeSec)) render();
+    });
 
     render();
 
     return {
-      onOpen(opts) { if (opts.tab && renderers[opts.tab]) { activeSec = opts.tab; render(); } },
-      unmount() { unsubTheme(); el.remove(); },
+      onOpen(opts) {
+        if (opts.tab && renderers[opts.tab]) {
+          activeSec = opts.tab;
+          render();
+        }
+      },
+      unmount() {
+        unsubTheme();
+        el.remove();
+      },
     };
   },
 };
 
 function debounce(fn, ms) {
-  let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
+  let t;
+  return (...a) => {
+    clearTimeout(t);
+    t = setTimeout(() => fn(...a), ms);
+  };
 }
-function escape(s) { return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+function escape(s) {
+  return String(s).replace(
+    /[&<>"']/g,
+    (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        c
+      ],
+  );
+}

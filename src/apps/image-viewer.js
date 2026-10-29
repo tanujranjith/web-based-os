@@ -1,152 +1,182 @@
-import { fs, basename, dirname } from "../core/filesystem.js";
-
+import { fs, basename } from "../core/filesystem.js";
+import { fileDialog } from "../ui/dialogs.js";
+import { bus } from "../core/event-bus.js";
 export default {
   id: "image-viewer",
-  name: "Photos",
-  icon: "🖼",
+  name: "Images",
   category: "Media",
-  defaultSize: { w: 760, h: 560 },
-  keywords: ["image", "photo", "viewer", "picture"],
+  keywords: ["photo", "image", "crop", "rotate"],
+  defaultSize: { w: 1000, h: 720 },
   mount(container, ctx) {
+    let path = null,
+      zoom = 1,
+      rotation = 0,
+      x = 0,
+      y = 0,
+      crop = false,
+      start,
+      selection = null,
+      disposed = false;
     const el = document.createElement("div");
-    el.className = "app iv-app";
-    el.innerHTML = `
-      <div class="app-toolbar">
-        <button class="btn ghost" id="iv-prev" title="Previous">‹</button>
-        <button class="btn ghost" id="iv-next" title="Next">›</button>
-        <button class="btn ghost" id="iv-fit" title="Fit">⤢</button>
-        <button class="btn ghost" id="iv-actual" title="100%">1:1</button>
-        <button class="btn ghost" id="iv-zoom-in">＋</button>
-        <button class="btn ghost" id="iv-zoom-out">−</button>
-        <span class="ce-status" id="iv-name">—</span>
-        <span class="ce-spacer"></span>
-        <button class="btn" id="iv-wallpaper">Set as wallpaper</button>
-        <label class="btn">Import…<input id="iv-import" type="file" accept="image/*" multiple hidden></label>
-      </div>
-      <div class="iv-stage" id="iv-stage">
-        <img id="iv-img" alt="Image preview"/>
-        <div class="iv-empty" id="iv-empty">
-          <div class="em-icon">🌅</div>
-          <div class="em-title">No images yet</div>
-          <div class="em-sub">Import images (saved to /Pictures), or open one from the Files app.</div>
-        </div>
-      </div>
-      <div class="iv-thumbs scroll-thin" id="iv-thumbs"></div>
-    `;
-    container.appendChild(el);
-
-    const stage = el.querySelector("#iv-stage");
-    const $img = el.querySelector("#iv-img");
-    const $empty = el.querySelector("#iv-empty");
-    const $thumbs = el.querySelector("#iv-thumbs");
-    const $name = el.querySelector("#iv-name");
-
-    let list = [], idx = -1;
-    let zoom = 1, tx = 0, ty = 0;
-
-    const collect = () => {
-      const found = [];
-      const walk = (node, base) => {
-        for (const child of Object.values(node.children || {})) {
-          const p = base === "/" ? "/" + child.name : base + "/" + child.name;
-          if (child.type === "dir") walk(child, p);
-          else if (child.binary && /^image\//.test(child.mime || "")) found.push(p);
+    el.className = "app image-v4";
+    el.innerHTML = `<div class="app-toolbar"><button class="btn" data-open>Open</button><label class="btn">Import<input type="file" accept="image/*" hidden></label><button class="btn" data-fit>Fit</button><button class="btn" data-in aria-label="Zoom in">+</button><button class="btn" data-out aria-label="Zoom out">−</button><button class="btn" data-rotate>Rotate</button><button class="btn" data-crop>Crop</button><button class="btn primary" data-save>Save copy</button><span data-info></span></div><div class="image-stage"><img alt="" draggable="false" hidden><div class="crop-selection" hidden></div><p data-empty>Open an image to view or edit.</p></div>`;
+    container.append(el);
+    const stage = el.querySelector(".image-stage"),
+      img = el.querySelector("img"),
+      box = el.querySelector(".crop-selection");
+    function transform() {
+      img.style.transform = `translate(${x}px,${y}px) rotate(${rotation}deg) scale(${zoom})`;
+    }
+    function fit() {
+      zoom = 1;
+      rotation = 0;
+      x = y = 0;
+      transform();
+      selection = null;
+      box.hidden = true;
+    }
+    function open(p) {
+      const node = fs.read(p);
+      if (!node) return;
+      path = p;
+      img.src = node.content;
+      img.alt = basename(p);
+      img.hidden = false;
+      el.querySelector("[data-empty]").hidden = true;
+      fit();
+      ctx.setTitle("Images · " + basename(p));
+      ctx.checkpoint?.();
+      img.onload = () => {
+        if (!disposed)
+          el.querySelector("[data-info]").textContent =
+            `${img.naturalWidth} × ${img.naturalHeight}`;
+      };
+    }
+    function output() {
+      if (!path) return;
+      const canvas = document.createElement("canvas"),
+        c = canvas.getContext("2d");
+      if (selection && crop) {
+        const r = img.getBoundingClientRect();
+        const scaleX = img.naturalWidth / r.width,
+          scaleY = img.naturalHeight / r.height;
+        canvas.width = Math.round(selection.w * scaleX);
+        canvas.height = Math.round(selection.h * scaleY);
+        if (canvas.width < 1 || canvas.height < 1) return;
+        const sr = stage.getBoundingClientRect();
+        c.drawImage(
+          img,
+          (selection.x + sr.left - r.left) * scaleX,
+          (selection.y + sr.top - r.top) * scaleY,
+          canvas.width,
+          canvas.height,
+          0,
+          0,
+          canvas.width,
+          canvas.height,
+        );
+      } else {
+        const swap = rotation % 180 !== 0;
+        canvas.width = swap ? img.naturalHeight : img.naturalWidth;
+        canvas.height = swap ? img.naturalWidth : img.naturalHeight;
+        c.translate(canvas.width / 2, canvas.height / 2);
+        c.rotate((rotation * Math.PI) / 180);
+        c.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
+      }
+      const p = fs.unique(
+        "/Pictures/" + basename(path).replace(/\.[^.]+$/, "") + " edited.png",
+      );
+      fs.touch(p, canvas.toDataURL("image/png"), {
+        binary: true,
+        mime: "image/png",
+      });
+      bus.emit("notify", { title: "Image saved", body: p });
+      open(p);
+    }
+    el.querySelector("[data-open]").onclick = async () => {
+      const p = await fileDialog({
+        accept: (p) => fs.read(p)?.mime?.startsWith("image/"),
+      });
+      if (p) open(p);
+    };
+    el.querySelector("input").onchange = async (e) => {
+      if (e.target.files[0])
+        open(await fs.importFile(e.target.files[0], "/Pictures"));
+    };
+    el.querySelector("[data-fit]").onclick = fit;
+    el.querySelector("[data-in]").onclick = () => {
+      zoom = Math.min(8, zoom * 1.2);
+      transform();
+    };
+    el.querySelector("[data-out]").onclick = () => {
+      zoom = Math.max(0.1, zoom / 1.2);
+      transform();
+    };
+    el.querySelector("[data-rotate]").onclick = () => {
+      crop = false;
+      selection = null;
+      box.hidden = true;
+      rotation = (rotation + 90) % 360;
+      transform();
+    };
+    el.querySelector("[data-crop]").onclick = () => {
+      fit();
+      crop = !crop;
+      el.querySelector("[data-crop]").setAttribute("aria-pressed", crop);
+    };
+    el.querySelector("[data-save]").onclick = output;
+    stage.onwheel = (e) => {
+      e.preventDefault();
+      zoom = Math.max(0.1, Math.min(8, zoom * (e.deltaY < 0 ? 1.1 : 0.9)));
+      transform();
+    };
+    stage.onpointerdown = (e) => {
+      if (!path) return;
+      const r = stage.getBoundingClientRect();
+      start = { x: e.clientX, y: e.clientY, tx: x, ty: y };
+      stage.setPointerCapture(e.pointerId);
+      stage.onpointermove = (event) => {
+        if (!start) return;
+        if (crop) {
+          const ir = img.getBoundingClientRect();
+          const left = Math.max(ir.left, Math.min(start.x, event.clientX)),
+            top = Math.max(ir.top, Math.min(start.y, event.clientY)),
+            right = Math.min(ir.right, Math.max(start.x, event.clientX)),
+            bottom = Math.min(ir.bottom, Math.max(start.y, event.clientY));
+          selection = {
+            x: left - r.left,
+            y: top - r.top,
+            w: Math.max(0, right - left),
+            h: Math.max(0, bottom - top),
+          };
+          box.hidden = false;
+          Object.assign(box.style, {
+            left: selection.x + "px",
+            top: selection.y + "px",
+            width: selection.w + "px",
+            height: selection.h + "px",
+          });
+        } else {
+          x = start.tx + event.clientX - start.x;
+          y = start.ty + event.clientY - start.y;
+          transform();
         }
       };
-      walk(fs.root, "/");
-      return found.sort();
     };
-
-    const setImg = (path) => {
-      const node = fs.read(path);
-      if (!node) return;
-      $img.src = node.content;
-      $img.hidden = false;
-      $empty.hidden = true;
-      $name.textContent = basename(path);
-      ctx.setTitle?.("Photos — " + basename(path));
-      zoom = 1; tx = 0; ty = 0; applyTransform();
+    stage.onpointerup = () => {
+      start = null;
+      stage.onpointermove = null;
     };
-
-    const renderThumbs = () => {
-      $thumbs.innerHTML = list.map((p, i) => `<button class="iv-thumb ${i === idx ? "active" : ""}" data-i="${i}"><img src="${escape((fs.read(p) || {}).content || "")}" alt=""></button>`).join("");
-      $thumbs.querySelectorAll(".iv-thumb").forEach((t) => t.addEventListener("click", () => { idx = +t.dataset.i; setImg(list[idx]); renderThumbs(); }));
+    if (ctx.opts.openFsFile) open(ctx.opts.openFsFile);
+    return {
+      onOpen(opts) {
+        if (opts.openFsFile) open(opts.openFsFile);
+      },
+      session: () => ({ openFsFile: path }),
+      unmount() {
+        disposed = true;
+        el.remove();
+      },
     };
-
-    const refresh = () => {
-      list = collect();
-      if (!list.length) {
-        $img.hidden = true; $empty.hidden = false; $name.textContent = "—"; renderThumbs();
-        return;
-      }
-      if (idx < 0 || idx >= list.length) idx = 0;
-      setImg(list[idx]);
-      renderThumbs();
-    };
-
-    const next = (dir) => { if (!list.length) return; idx = (idx + dir + list.length) % list.length; setImg(list[idx]); renderThumbs(); };
-
-    const applyTransform = () => { $img.style.transform = `translate(${tx}px, ${ty}px) scale(${zoom})`; };
-    const setZoom = (z) => { zoom = Math.max(0.1, Math.min(8, z)); applyTransform(); };
-
-    el.querySelector("#iv-prev").addEventListener("click", () => next(-1));
-    el.querySelector("#iv-next").addEventListener("click", () => next(1));
-    el.querySelector("#iv-fit").addEventListener("click", () => { zoom = 1; tx = 0; ty = 0; applyTransform(); });
-    el.querySelector("#iv-actual").addEventListener("click", () => setZoom(1));
-    el.querySelector("#iv-zoom-in").addEventListener("click", () => setZoom(zoom * 1.2));
-    el.querySelector("#iv-zoom-out").addEventListener("click", () => setZoom(zoom / 1.2));
-
-    el.querySelector("#iv-wallpaper").addEventListener("click", () => {
-      if (idx < 0) return;
-      const node = fs.read(list[idx]);
-      if (!node) return;
-      // Use the data URL as a custom wallpaper via inline background
-      document.getElementById("wallpaper").style.background = `center/cover no-repeat url("${node.content}")`;
-      import("../ui/notifications.js").then(({ notify }) => notify({ title: "Wallpaper set", body: basename(list[idx]) }));
-    });
-
-    el.querySelector("#iv-import").addEventListener("change", async (e) => {
-      const files = Array.from(e.target.files || []);
-      for (const f of files) {
-        const dataUrl = await new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(f); });
-        const dest = "/Pictures/" + uniqueName("/Pictures", f.name);
-        fs.touch(dest, dataUrl, { mime: f.type || "image/png", binary: true });
-      }
-      e.target.value = "";
-      refresh();
-    });
-
-    // Mouse drag to pan
-    let dragging = false, lastX = 0, lastY = 0;
-    stage.addEventListener("mousedown", (e) => { if (e.target !== $img) return; dragging = true; lastX = e.clientX; lastY = e.clientY; stage.style.cursor = "grabbing"; });
-    window.addEventListener("mousemove", (e) => { if (!dragging) return; tx += e.clientX - lastX; ty += e.clientY - lastY; lastX = e.clientX; lastY = e.clientY; applyTransform(); });
-    window.addEventListener("mouseup", () => { dragging = false; stage.style.cursor = ""; });
-
-    // Wheel to zoom
-    stage.addEventListener("wheel", (e) => { e.preventDefault(); setZoom(zoom * (e.deltaY < 0 ? 1.1 : 0.9)); }, { passive: false });
-
-    if (ctx.opts?.openFsFile && fs.exists(ctx.opts.openFsFile)) {
-      list = collect();
-      idx = Math.max(0, list.indexOf(ctx.opts.openFsFile));
-      setImg(ctx.opts.openFsFile);
-      renderThumbs();
-    } else {
-      refresh();
-    }
-
-    return { unmount() { el.remove(); } };
   },
 };
-
-function uniqueName(dir, name) {
-  let n = name, i = 1;
-  while (fs.exists(dir + "/" + n)) {
-    const dot = name.lastIndexOf(".");
-    if (dot > 0) n = name.slice(0, dot) + ` (${i})` + name.slice(dot);
-    else n = `${name} (${i})`;
-    i++;
-  }
-  return n;
-}
-
-function escape(s) { return String(s).replace(/"/g, '\\"'); }

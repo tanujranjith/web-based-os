@@ -1,141 +1,150 @@
 import { fs } from "../core/filesystem.js";
+import { store } from "../core/state.js";
 import { bus } from "../core/event-bus.js";
-
 export default {
   id: "paint",
   name: "Paint",
-  icon: "🎨",
   category: "Media",
-  defaultSize: { w: 760, h: 560 },
-  keywords: ["draw", "sketch", "art", "canvas"],
+  keywords: ["draw", "sketch", "canvas"],
+  defaultSize: { w: 1040, h: 720 },
   mount(container) {
     const el = document.createElement("div");
-    el.className = "app paint-app";
-    el.innerHTML = `
-      <div class="app-toolbar">
-        <button class="btn ${0}" data-tool="brush" id="t-brush">🖌</button>
-        <button class="btn ghost" data-tool="eraser" id="t-eraser">🩹</button>
-        <button class="btn ghost" data-tool="line" id="t-line">／</button>
-        <button class="btn ghost" data-tool="rect" id="t-rect">▭</button>
-        <button class="btn ghost" data-tool="ellipse" id="t-ellipse">◯</button>
-        <span class="ce-spacer"></span>
-        <input type="color" id="paint-color" value="#5b8def" title="Color"/>
-        <input type="range" id="paint-size" min="1" max="40" value="6" title="Brush size"/>
-        <button class="btn ghost" id="paint-clear">Clear</button>
-        <button class="btn ghost" id="paint-undo">Undo</button>
-        <button class="btn primary" id="paint-save">Save to Pictures</button>
-      </div>
-      <div class="paint-stage" id="paint-stage">
-        <canvas id="paint-canvas"></canvas>
-      </div>
-    `;
-    container.appendChild(el);
-    const stage = el.querySelector("#paint-stage");
-    const canvas = el.querySelector("#paint-canvas");
-    const ctx = canvas.getContext("2d");
-    let tool = "brush", drawing = false, last = null, snapshot = null, undoStack = [];
-
-    const resize = () => {
-      const rect = stage.getBoundingClientRect();
-      const dpr = window.devicePixelRatio || 1;
-      const img = canvas.width ? canvas.toDataURL() : null;
-      canvas.width = Math.max(2, Math.floor(rect.width * dpr));
-      canvas.height = Math.max(2, Math.floor(rect.height * dpr));
-      canvas.style.width = rect.width + "px";
-      canvas.style.height = rect.height + "px";
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      if (img) {
-        const i = new Image();
-        i.onload = () => ctx.drawImage(i, 0, 0, canvas.width, canvas.height);
-        i.src = img;
-      }
-    };
-    resize();
-    const ro = new ResizeObserver(resize);
-    ro.observe(stage);
-
-    const pos = (e) => {
+    el.className = "app paint-v4";
+    el.innerHTML = `<div class="app-toolbar"><select class="select" aria-label="Drawing tool"><option value="brush">Brush</option><option value="eraser">Eraser</option><option value="line">Line</option><option value="rect">Rectangle</option><option value="ellipse">Ellipse</option></select><input type="color" value="#4f7fe8" aria-label="Brush color"><input type="range" min="1" max="50" value="6" aria-label="Brush size"><button class="btn" data-undo>Undo</button><button class="btn" data-redo>Redo</button><button class="btn" data-clear>Clear</button><button class="btn primary" data-save>Save to Pictures</button><button class="btn" data-export>Export PNG</button></div><div class="paint-stage scroll-thin"><canvas width="1280" height="800" aria-label="Drawing canvas"></canvas></div>`;
+    container.append(el);
+    const canvas = el.querySelector("canvas"),
+      c = canvas.getContext("2d");
+    let undo = [],
+      redo = [],
+      drawing = false,
+      start,
+      snapshot,
+      disposed = false;
+    c.fillStyle = "white";
+    c.fillRect(0, 0, 1280, 800);
+    function restore(data) {
+      const image = new Image();
+      image.onload = () => {
+        if (disposed) return;
+        c.clearRect(0, 0, 1280, 800);
+        c.drawImage(image, 0, 0);
+      };
+      image.src = data;
+    }
+    if (store.get().paintDraft) restore(store.get().paintDraft);
+    function persist() {
+      store.update((s) => (s.paintDraft = canvas.toDataURL("image/png")));
+    }
+    function push() {
+      undo.push(canvas.toDataURL("image/png"));
+      undo = undo.slice(-24);
+      redo = [];
+    }
+    const point = (e) => {
       const r = canvas.getBoundingClientRect();
-      const x = (e.clientX - r.left) * (canvas.width / r.width);
-      const y = (e.clientY - r.top) * (canvas.height / r.height);
-      return { x, y };
+      return {
+        x: ((e.clientX - r.left) * canvas.width) / r.width,
+        y: ((e.clientY - r.top) * canvas.height) / r.height,
+      };
     };
-
-    const pushUndo = () => {
-      try {
-        undoStack.push(canvas.toDataURL("image/png"));
-        if (undoStack.length > 20) undoStack.shift();
-      } catch {}
-    };
-    const undo = () => {
-      const snap = undoStack.pop();
-      if (!snap) return;
-      const i = new Image();
-      i.onload = () => { ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.drawImage(i, 0, 0); };
-      i.src = snap;
-    };
-
-    const setTool = (t) => {
-      tool = t;
-      el.querySelectorAll('[data-tool]').forEach((b) => b.classList.toggle("ghost", b.dataset.tool !== t));
-    };
-    el.querySelectorAll('[data-tool]').forEach((b) => b.addEventListener("click", () => setTool(b.dataset.tool)));
-
-    canvas.addEventListener("mousedown", (e) => {
-      pushUndo();
+    canvas.onpointerdown = (e) => {
+      e.preventDefault();
+      canvas.setPointerCapture(e.pointerId);
+      push();
       drawing = true;
-      last = pos(e);
-      const color = el.querySelector("#paint-color").value;
-      const size = +el.querySelector("#paint-size").value;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.strokeStyle = tool === "eraser" ? "#ffffff" : color;
-      ctx.fillStyle = color;
-      ctx.lineWidth = size;
-      if (tool === "line" || tool === "rect" || tool === "ellipse") {
-        snapshot = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      } else {
-        ctx.beginPath();
-        ctx.moveTo(last.x, last.y);
-        ctx.lineTo(last.x + 0.01, last.y + 0.01);
-        ctx.stroke();
-      }
-    });
-    canvas.addEventListener("mousemove", (e) => {
+      start = point(e);
+      snapshot = c.getImageData(0, 0, 1280, 800);
+      c.strokeStyle =
+        el.querySelector("select").value === "eraser"
+          ? "white"
+          : el.querySelector("input[type=color]").value;
+      c.lineWidth = +el.querySelector("input[type=range]").value;
+      c.lineCap = "round";
+      c.lineJoin = "round";
+      c.beginPath();
+      c.moveTo(start.x, start.y);
+      c.lineTo(start.x + 0.01, start.y + 0.01);
+      c.stroke();
+    };
+    canvas.onpointermove = (e) => {
       if (!drawing) return;
-      const p = pos(e);
+      const p = point(e),
+        tool = el.querySelector("select").value;
       if (tool === "brush" || tool === "eraser") {
-        ctx.beginPath();
-        ctx.moveTo(last.x, last.y);
-        ctx.lineTo(p.x, p.y);
-        ctx.stroke();
-        last = p;
-      } else if (snapshot) {
-        ctx.putImageData(snapshot, 0, 0);
-        if (tool === "line") {
-          ctx.beginPath(); ctx.moveTo(last.x, last.y); ctx.lineTo(p.x, p.y); ctx.stroke();
-        } else if (tool === "rect") {
-          ctx.strokeRect(last.x, last.y, p.x - last.x, p.y - last.y);
-        } else if (tool === "ellipse") {
-          ctx.beginPath();
-          ctx.ellipse((last.x + p.x) / 2, (last.y + p.y) / 2, Math.abs(p.x - last.x) / 2, Math.abs(p.y - last.y) / 2, 0, 0, Math.PI * 2);
-          ctx.stroke();
+        c.beginPath();
+        c.moveTo(start.x, start.y);
+        c.lineTo(p.x, p.y);
+        c.stroke();
+        start = p;
+      } else {
+        c.putImageData(snapshot, 0, 0);
+        if (tool === "rect")
+          c.strokeRect(start.x, start.y, p.x - start.x, p.y - start.y);
+        else if (tool === "ellipse") {
+          c.beginPath();
+          c.ellipse(
+            (start.x + p.x) / 2,
+            (start.y + p.y) / 2,
+            Math.abs(p.x - start.x) / 2,
+            Math.abs(p.y - start.y) / 2,
+            0,
+            0,
+            Math.PI * 2,
+          );
+          c.stroke();
+        } else {
+          c.beginPath();
+          c.moveTo(start.x, start.y);
+          c.lineTo(p.x, p.y);
+          c.stroke();
         }
       }
-    });
-    window.addEventListener("mouseup", () => { drawing = false; snapshot = null; });
-
-    el.querySelector("#paint-clear").addEventListener("click", () => { pushUndo(); ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, canvas.width, canvas.height); });
-    el.querySelector("#paint-undo").addEventListener("click", undo);
-    el.querySelector("#paint-save").addEventListener("click", () => {
-      const dataUrl = canvas.toDataURL("image/png");
-      const name = "Painting " + new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19) + ".png";
-      const path = "/Pictures/" + name;
-      fs.touch(path, dataUrl, { mime: "image/png", binary: true });
-      bus.emit("notify", { title: "Painting saved", body: path });
-    });
-
-    return { unmount() { ro.disconnect(); el.remove(); } };
+    };
+    canvas.onpointerup = canvas.onpointercancel = () => {
+      if (drawing) {
+        drawing = false;
+        persist();
+      }
+    };
+    el.querySelector("[data-undo]").onclick = () => {
+      const data = undo.pop();
+      if (data) {
+        redo.push(canvas.toDataURL());
+        restore(data);
+        store.update((s) => (s.paintDraft = data));
+      }
+    };
+    el.querySelector("[data-redo]").onclick = () => {
+      const data = redo.pop();
+      if (data) {
+        undo.push(canvas.toDataURL());
+        restore(data);
+        store.update((s) => (s.paintDraft = data));
+      }
+    };
+    el.querySelector("[data-clear]").onclick = () => {
+      push();
+      c.fillStyle = "white";
+      c.fillRect(0, 0, 1280, 800);
+      persist();
+    };
+    el.querySelector("[data-save]").onclick = () => {
+      const p = fs.unique("/Pictures/Painting.png");
+      fs.touch(p, canvas.toDataURL(), { mime: "image/png", binary: true });
+      bus.emit("notify", { title: "Painting saved", body: p });
+    };
+    el.querySelector("[data-export]").onclick = () => {
+      const a = document.createElement("a");
+      a.href = canvas.toDataURL();
+      a.download = "Painting.png";
+      a.click();
+    };
+    return {
+      unmount() {
+        disposed = true;
+        persist();
+        el.remove();
+      },
+    };
   },
 };

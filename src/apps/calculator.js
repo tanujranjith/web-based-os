@@ -1,128 +1,100 @@
+import { store } from "../core/state.js";
+import { calculate } from "../core/arithmetic.js";
+import { escape } from "../ui/icons.js";
 export default {
   id: "calculator",
   name: "Calculator",
-  icon: "🧮",
   category: "Utilities",
-  defaultSize: { w: 320, h: 480 },
-  keywords: ["calc", "math", "compute"],
+  keywords: ["math", "scientific", "calc"],
+  defaultSize: { w: 420, h: 650 },
   mount(container) {
     const el = document.createElement("div");
     el.className = "app calc-app";
-    el.innerHTML = `
-      <div class="calc-display">
-        <div class="calc-expr" id="calc-expr"></div>
-        <div class="calc-val" id="calc-val">0</div>
-      </div>
-      <div class="calc-history" id="calc-history" hidden></div>
-      <div class="calc-keys">
-        <button data-k="C" class="calc-k fn">C</button>
-        <button data-k="⌫" class="calc-k fn">⌫</button>
-        <button data-k="%" class="calc-k fn">%</button>
-        <button data-k="/" class="calc-k op">÷</button>
-
-        <button data-k="7" class="calc-k">7</button>
-        <button data-k="8" class="calc-k">8</button>
-        <button data-k="9" class="calc-k">9</button>
-        <button data-k="*" class="calc-k op">×</button>
-
-        <button data-k="4" class="calc-k">4</button>
-        <button data-k="5" class="calc-k">5</button>
-        <button data-k="6" class="calc-k">6</button>
-        <button data-k="-" class="calc-k op">−</button>
-
-        <button data-k="1" class="calc-k">1</button>
-        <button data-k="2" class="calc-k">2</button>
-        <button data-k="3" class="calc-k">3</button>
-        <button data-k="+" class="calc-k op">+</button>
-
-        <button data-k="H" class="calc-k fn">↻</button>
-        <button data-k="0" class="calc-k">0</button>
-        <button data-k="." class="calc-k">.</button>
-        <button data-k="=" class="calc-k eq">=</button>
-      </div>
-    `;
-    container.appendChild(el);
-
-    const $expr = el.querySelector("#calc-expr");
-    const $val = el.querySelector("#calc-val");
-    const $hist = el.querySelector("#calc-history");
-    let expr = "";
-    let history = [];
-
-    const update = () => { $expr.textContent = formatExpr(expr); $val.textContent = preview(expr) ?? "0"; };
-
-    const press = (k) => {
-      if (k === "C") { expr = ""; update(); return; }
-      if (k === "⌫") { expr = expr.slice(0, -1); update(); return; }
-      if (k === "=") {
-        const v = preview(expr);
-        if (v == null) return;
-        history.unshift({ expr, val: v });
-        history = history.slice(0, 10);
-        renderHistory();
-        expr = String(v);
-        update();
-        return;
+    el.innerHTML = `<div class="app-toolbar"><button class="btn" data-angle>Radians</button><button class="btn" data-history>History</button></div><div class="calc-display"><input class="input" aria-label="Expression" placeholder="0"><div class="calc-val">0</div></div><div class="calc-science">${["sin(", "cos(", "tan(", "sqrt(", "log(", "ln(", "pi", "e", "(", ")", "^", "!"].map((k) => `<button class="btn" data-key="${k}">${k.replace("(", "")}</button>`).join("")}</div><div class="calc-history" hidden></div><div class="calc-keys">${["C", "⌫", "%", "/", "7", "8", "9", "*", "4", "5", "6", "-", "1", "2", "3", "+", "±", "0", ".", "="].map((k) => `<button class="calc-k ${["/", "*", "-", "+"].includes(k) ? "op" : k === "=" ? "eq" : ""}" data-key="${k}">${{ "/": "÷", "*": "×" }[k] || k}</button>`).join("")}</div>`;
+    container.append(el);
+    const input = el.querySelector("input"),
+      out = el.querySelector(".calc-val"),
+      history = el.querySelector(".calc-history");
+    let degrees = false;
+    const preview = () => {
+      try {
+        out.textContent = calculate(input.value, degrees);
+      } catch {
+        out.textContent = input.value ? "…" : "0";
       }
-      if (k === "H") { $hist.hidden = !$hist.hidden; return; }
-      // Replace trailing operator if user types another
-      if ("+-*/%".includes(k) && "+-*/%".includes(expr.slice(-1))) {
-        expr = expr.slice(0, -1) + k;
-      } else {
-        expr += k;
+    };
+    const evaluate = () => {
+      try {
+        const value = calculate(input.value, degrees);
+        store.update((s) => {
+          s.calcHistory = [
+            { expression: input.value, value },
+            ...(s.calcHistory || []),
+          ].slice(0, 40);
+        });
+        input.value = String(value);
+        preview();
+        render();
+      } catch (error) {
+        out.textContent = error.message;
       }
-      update();
     };
-
-    const renderHistory = () => {
-      if (!history.length) { $hist.innerHTML = `<div class="calc-empty">No history</div>`; return; }
-      $hist.innerHTML = history.map((h) => `
-        <div class="calc-h-row" data-val="${escape(String(h.val))}">
-          <span class="calc-h-expr">${escape(formatExpr(h.expr))}</span>
-          <span class="calc-h-val">${escape(String(h.val))}</span>
-        </div>`).join("");
-      $hist.querySelectorAll(".calc-h-row").forEach((r) => {
-        r.addEventListener("click", () => { expr = r.dataset.val; update(); });
-      });
+    const render = () => {
+      history.innerHTML =
+        (store.get().calcHistory || [])
+          .map(
+            (h, i) =>
+              `<button class="calc-h-row" data-index="${i}"><span>${escape(h.expression)}</span><strong>${h.value}</strong></button>`,
+          )
+          .join("") || '<p class="app-empty">No calculations yet.</p>';
+      history.querySelectorAll("button").forEach(
+        (b) =>
+          (b.onclick = () => {
+            input.value = String(
+              store.get().calcHistory[+b.dataset.index].value,
+            );
+            preview();
+          }),
+      );
     };
-
-    el.querySelectorAll(".calc-k").forEach((b) => b.addEventListener("click", () => press(b.dataset.k)));
-
-    const onKey = (e) => {
-      const map = { Enter: "=", "=": "=", Backspace: "⌫", Escape: "C", Delete: "C" };
-      const k = map[e.key] || (/^[0-9.+\-*/%]$/.test(e.key) ? e.key : null);
-      if (!k) return;
-      e.preventDefault();
-      press(k);
+    el.querySelectorAll("[data-key]").forEach(
+      (b) =>
+        (b.onclick = () => {
+          const k = b.dataset.key;
+          if (k === "=") return evaluate();
+          if (k === "C") input.value = "";
+          else if (k === "⌫") input.value = input.value.slice(0, -1);
+          else if (k === "±") input.value = "-(" + input.value + ")";
+          else
+            input.setRangeText(
+              k,
+              input.selectionStart,
+              input.selectionEnd,
+              "end",
+            );
+          preview();
+          input.focus();
+        }),
+    );
+    input.oninput = preview;
+    input.onkeydown = (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        evaluate();
+      }
     };
-    el.tabIndex = 0;
-    el.addEventListener("keydown", onKey);
-    setTimeout(() => el.focus(), 50);
-
-    update(); renderHistory();
-    return { unmount() { el.remove(); } };
+    el.querySelector("[data-angle]").onclick = (e) => {
+      degrees = !degrees;
+      e.target.textContent = degrees ? "Degrees" : "Radians";
+      preview();
+    };
+    el.querySelector("[data-history]").onclick = () =>
+      (history.hidden = !history.hidden);
+    render();
+    return {
+      unmount() {
+        el.remove();
+      },
+    };
   },
 };
-
-function formatExpr(s) {
-  return s.replace(/\*/g, " × ").replace(/\//g, " ÷ ").replace(/-/g, " − ").replace(/\+/g, " + ").replace(/%/g, "%");
-}
-
-function preview(expr) {
-  if (!expr) return null;
-  // Replace trailing operator
-  let e = expr.replace(/[+\-*/%]$/, "");
-  if (!e) return null;
-  // Allow only safe characters
-  if (!/^[0-9+\-*/%.\s()]+$/.test(e)) return null;
-  try {
-    // Treat % as /100 when used between numbers and operators
-    e = e.replace(/(\d+(?:\.\d+)?)%/g, "($1/100)");
-    // eslint-disable-next-line no-new-func
-    const v = Function(`"use strict";return (${e});`)();
-    if (typeof v !== "number" || !isFinite(v)) return null;
-    return Math.round(v * 1e12) / 1e12;
-  } catch { return null; }
-}
-
-function escape(s) { return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }

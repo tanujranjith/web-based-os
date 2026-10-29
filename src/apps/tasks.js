@@ -1,162 +1,142 @@
 import { store } from "../core/state.js";
-
+import { bus } from "../core/event-bus.js";
+import { dateKey } from "../core/calendar.js";
+import { addTask, updateTask } from "../core/tasks.js";
+import { escape } from "../ui/icons.js";
 export default {
   id: "tasks",
   name: "Tasks",
-  icon: "✅",
   category: "Productivity",
-  defaultSize: { w: 680, h: 540 },
-  keywords: ["todo", "task", "calendar", "events"],
-  mount(container) {
+  keywords: ["todo", "task", "project"],
+  defaultSize: { w: 920, h: 680 },
+  mount(container, ctx) {
     const el = document.createElement("div");
-    el.className = "app tasks-app app-content";
-    el.innerHTML = `
-      <div class="tasks-header">
-        <h2>Tasks</h2>
-        <div class="tasks-tabs">
-          <button class="tasks-tab active" data-tab="all">All</button>
-          <button class="tasks-tab" data-tab="open">Open</button>
-          <button class="tasks-tab" data-tab="done">Done</button>
-          <button class="tasks-tab" data-tab="today">Today</button>
-        </div>
-      </div>
-      <div class="tasks-input-row">
-        <input class="input" id="t-input" placeholder="Add a task (press Enter)…" />
-        <input class="input" id="t-when" type="date" style="max-width:160px" />
-        <button class="btn primary" id="t-add">Add</button>
-      </div>
-      <div class="tasks-list" id="t-list"></div>
-      <div>
-        <div class="cal-header">
-          <button class="btn ghost" id="cal-prev">‹</button>
-          <h3 id="cal-title">—</h3>
-          <button class="btn ghost" id="cal-next">›</button>
-        </div>
-        <div class="cal" id="cal"></div>
-      </div>
-    `;
-    container.appendChild(el);
-
-    const $input = el.querySelector("#t-input");
-    const $when = el.querySelector("#t-when");
-    const $add = el.querySelector("#t-add");
-    const $list = el.querySelector("#t-list");
-    const $cal = el.querySelector("#cal");
-    const $calTitle = el.querySelector("#cal-title");
-
-    let filter = "all";
-    let calRef = new Date(); calRef.setDate(1);
-
-    const tasks = () => store.get().tasks;
-
-    const renderList = () => {
-      let list = [...tasks()];
-      if (filter === "open") list = list.filter((t) => !t.done);
-      else if (filter === "done") list = list.filter((t) => t.done);
-      else if (filter === "today") {
-        const today = ymd(new Date());
-        list = list.filter((t) => t.when === today);
-      }
-      list.sort((a, b) => Number(a.done) - Number(b.done) || (a.when || "").localeCompare(b.when || "") || b.createdAt - a.createdAt);
-
-      if (!list.length) {
-        $list.innerHTML = `<div class="app-empty"><div class="em-icon">🌤</div><div class="em-title">Nothing here</div><div class="em-sub">Add a task above to get started.</div></div>`;
-        return;
-      }
-      $list.innerHTML = list.map((t) => `
-        <div class="task-row ${t.done ? "done" : ""}" data-id="${t.id}">
-          <div class="checkbox ${t.done ? "checked" : ""}">${t.done ? "✓" : ""}</div>
-          <div class="label">${escape(t.text)}</div>
-          ${t.when ? `<div class="when">${formatDate(t.when)}</div>` : ""}
-          <button class="btn ghost" data-del aria-label="Delete">✕</button>
-        </div>
-      `).join("");
-      $list.querySelectorAll(".task-row").forEach((row) => {
-        const id = row.dataset.id;
-        row.querySelector(".checkbox").addEventListener("click", () => toggle(id));
-        row.querySelector("[data-del]").addEventListener("click", () => del(id));
+    el.className = "app task-workbench";
+    el.innerHTML = `<header class="workbench-heading"><div><small>YOUR WORK, IN VIEW</small><h1>Tasks</h1></div><button class="btn" data-calendar>Open Calendar</button></header><div class="app-toolbar"><input class="input" data-add placeholder="What needs doing?" aria-label="New task"><input class="input" type="date" data-due aria-label="Due date"><button class="btn primary" data-create>Add task</button></div><div class="app-toolbar"><select class="select" data-filter aria-label="Filter tasks"><option value="open">Open</option><option value="today">Today</option><option value="all">All tasks</option><option value="done">Completed</option></select><input class="input" data-search placeholder="Search tasks or projects" aria-label="Search tasks"></div><div class="task-records scroll-thin"></div><form class="task-detail" hidden><h3>Task details</h3><input class="input" name="text" aria-label="Task title" required><div class="row"><input class="input" type="date" name="when" aria-label="Due date"><select class="select" name="priority" aria-label="Priority"><option>Low</option><option>Normal</option><option>High</option></select><input class="input" name="project" placeholder="Project" aria-label="Project"></div><textarea class="input" name="description" placeholder="Description" aria-label="Description"></textarea><label>Subtasks, one per line<textarea class="input" name="subtasks"></textarea></label><div class="row"><button class="btn" type="button" data-cancel>Cancel</button><button class="btn primary">Save details</button></div></form>`;
+    container.append(el);
+    const form = el.querySelector("form");
+    let editing = null;
+    function render() {
+      const q = el.querySelector("[data-search]").value.toLowerCase(),
+        filter = el.querySelector("[data-filter]").value;
+      const tasks = store
+        .get()
+        .tasks.filter(
+          (t) =>
+            (filter === "all" || filter === "done"
+              ? filter === "all" || t.done
+              : !t.done) &&
+            (filter !== "today" || t.when === dateKey()) &&
+            [t.text, t.project, t.description]
+              .join(" ")
+              .toLowerCase()
+              .includes(q),
+        )
+        .sort(
+          (a, b) =>
+            Number(a.done) - Number(b.done) ||
+            ["High", "Normal", "Low"].indexOf(a.priority) -
+              ["High", "Normal", "Low"].indexOf(b.priority) ||
+            (a.when || "9999").localeCompare(b.when || "9999"),
+        );
+      el.querySelector(".task-records").innerHTML =
+        tasks
+          .map(
+            (t) =>
+              `<article class="task-record ${t.done ? "done" : ""}"><input type="checkbox" data-check="${escape(t.id)}" ${t.done ? "checked" : ""} aria-label="Complete ${escape(t.text)}"><button class="task-title" data-edit="${escape(t.id)}"><strong>${escape(t.text)}</strong><small>${escape([t.project, t.priority, t.when].filter(Boolean).join(" · "))}</small></button><span class="priority-dot ${t.priority}"></span><button class="btn" data-focus="${escape(t.id)}" aria-label="Focus on ${escape(t.text)}">◷</button><button class="btn" data-delete="${escape(t.id)}" aria-label="Delete ${escape(t.text)}">×</button>${(t.subtasks || []).map((sub, i) => `<label class="task-subtask"><input type="checkbox" data-sub="${escape(t.id)}" data-index="${i}" ${sub.done ? "checked" : ""}>${escape(sub.text)}</label>`).join("")}</article>`,
+          )
+          .join("") ||
+        '<div class="app-empty"><h3>You’re all caught up.</h3><p>Add a task when something comes to mind.</p></div>';
+      el.querySelectorAll("[data-check]").forEach(
+        (b) =>
+          (b.onchange = () => updateTask(b.dataset.check, { done: b.checked })),
+      );
+      el.querySelectorAll("[data-edit]").forEach(
+        (b) => (b.onclick = () => edit(b.dataset.edit)),
+      );
+      el.querySelectorAll("[data-sub]").forEach(
+        (b) =>
+          (b.onchange = () =>
+            store.update(
+              (s) =>
+                (s.tasks.find((t) => t.id === b.dataset.sub).subtasks[
+                  +b.dataset.index
+                ].done = b.checked),
+            )),
+      );
+      el.querySelectorAll("[data-focus]").forEach(
+        (b) =>
+          (b.onclick = () => {
+            store.update((s) => (s.focusTaskId = b.dataset.focus));
+            ctx.openApp("pomodoro");
+          }),
+      );
+      el.querySelectorAll("[data-delete]").forEach(
+        (b) =>
+          (b.onclick = () => {
+            if (confirm("Delete this task?"))
+              store.update(
+                (s) =>
+                  (s.tasks = s.tasks.filter((t) => t.id !== b.dataset.delete)),
+              );
+          }),
+      );
+    }
+    function edit(id) {
+      const t = store.get().tasks.find((t) => t.id === id);
+      if (!t) return;
+      editing = id;
+      for (const name of ["text", "when", "project", "priority", "description"])
+        form.elements[name].value = t[name] || "";
+      form.elements.subtasks.value = (t.subtasks || [])
+        .map((s) => (s.done ? "[x] " : "") + s.text)
+        .join("\n");
+      form.hidden = false;
+      form.elements.text.focus();
+    }
+    function create() {
+      const input = el.querySelector("[data-add]");
+      if (!input.value.trim()) return;
+      addTask({
+        text: input.value,
+        when: el.querySelector("[data-due]").value,
       });
+      input.value = "";
+      input.focus();
+    }
+    el.querySelector("[data-create]").onclick = create;
+    el.querySelector("[data-add]").onkeydown = (e) => {
+      if (e.key === "Enter") create();
     };
-
-    const renderCal = () => {
-      const y = calRef.getFullYear(), m = calRef.getMonth();
-      $calTitle.textContent = calRef.toLocaleDateString(undefined, { month: "long", year: "numeric" });
-      const start = new Date(y, m, 1);
-      const startDay = start.getDay();
-      const daysInMonth = new Date(y, m + 1, 0).getDate();
-      const prevDays = new Date(y, m, 0).getDate();
-      const today = ymd(new Date());
-      const dueDates = new Set(tasks().filter((t) => !t.done && t.when).map((t) => t.when));
-      const cells = [];
-      const days = ["S", "M", "T", "W", "T", "F", "S"];
-      for (const d of days) cells.push(`<div class="day-name">${d}</div>`);
-      for (let i = 0; i < startDay; i++) {
-        const day = prevDays - startDay + 1 + i;
-        cells.push(`<div class="day dim">${day}</div>`);
-      }
-      for (let d = 1; d <= daysInMonth; d++) {
-        const date = ymd(new Date(y, m, d));
-        const has = dueDates.has(date);
-        const isToday = date === today;
-        cells.push(`<div class="day ${isToday ? "today" : ""} ${has ? "has" : ""}" data-date="${date}">${d}</div>`);
-      }
-      // Trailing cells
-      while (cells.length % 7 !== 0) {
-        const after = cells.length - (7 + startDay + daysInMonth) + 1;
-        cells.push(`<div class="day dim">${after}</div>`);
-      }
-      $cal.innerHTML = cells.join("");
-      $cal.querySelectorAll(".day[data-date]").forEach((d) => {
-        d.addEventListener("click", () => {
-          $when.value = d.dataset.date;
-          $input.focus();
-        });
-      });
+    el.querySelector("[data-filter]").onchange = render;
+    el.querySelector("[data-search]").oninput = render;
+    el.querySelector("[data-cancel]").onclick = () => (form.hidden = true);
+    el.querySelector("[data-calendar]").onclick = () => ctx.openApp("calendar");
+    form.onsubmit = (e) => {
+      e.preventDefault();
+      const values = Object.fromEntries(new FormData(form));
+      values.subtasks = values.subtasks
+        .split("\n")
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map((s) => ({
+          text: s.replace(/^\[x\]\s*/i, ""),
+          done: /^\[x\]/i.test(s),
+        }));
+      updateTask(editing, values);
+      form.hidden = true;
     };
-
-    const add = () => {
-      const text = $input.value.trim();
-      if (!text) return;
-      const t = { id: crypto.randomUUID?.() || String(Math.random()).slice(2), text, done: false, when: $when.value || "", createdAt: Date.now() };
-      store.update((s) => { s.tasks.push(t); });
-      $input.value = ""; $when.value = "";
-      renderList(); renderCal();
-    };
-
-    const toggle = (id) => {
-      store.update((s) => {
-        const t = s.tasks.find((x) => x.id === id);
-        if (t) t.done = !t.done;
-      });
-      renderList(); renderCal();
-    };
-    const del = (id) => {
-      store.update((s) => { s.tasks = s.tasks.filter((x) => x.id !== id); });
-      renderList(); renderCal();
-    };
-
-    $add.addEventListener("click", add);
-    $input.addEventListener("keydown", (e) => { if (e.key === "Enter") add(); });
-    el.querySelector("#cal-prev").addEventListener("click", () => { calRef.setMonth(calRef.getMonth() - 1); renderCal(); });
-    el.querySelector("#cal-next").addEventListener("click", () => { calRef.setMonth(calRef.getMonth() + 1); renderCal(); });
-
-    el.querySelectorAll(".tasks-tab").forEach((t) => {
-      t.addEventListener("click", () => {
-        filter = t.dataset.tab;
-        el.querySelectorAll(".tasks-tab").forEach((x) => x.classList.toggle("active", x === t));
-        renderList();
-      });
-    });
-
-    renderList();
-    renderCal();
-
+    const off = bus.on("state-change", render);
+    render();
+    if (ctx.opts.taskId) edit(ctx.opts.taskId);
     return {
-      unmount() { el.remove(); },
+      onOpen: (opts) => {
+        if (opts.taskId) edit(opts.taskId);
+      },
+      unmount() {
+        off();
+        el.remove();
+      },
     };
   },
 };
-
-function ymd(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
-function formatDate(s) { const d = new Date(s + "T00:00:00"); return d.toLocaleDateString(undefined, { month: "short", day: "numeric" }); }
-function escape(s) { return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }

@@ -1,256 +1,318 @@
-import { fs, basename, joinPath } from "../core/filesystem.js";
+import { fs, basename } from "../core/filesystem.js";
+import { store } from "../core/state.js";
 import { bus } from "../core/event-bus.js";
-
+import { fileDialog } from "../ui/dialogs.js";
+import { escape } from "../ui/icons.js";
 export default {
   id: "code-editor",
   name: "Code",
-  icon: "💻",
   category: "Developer",
-  defaultSize: { w: 880, h: 580 },
-  keywords: ["code", "editor", "ide", "programming", "javascript"],
+  keywords: ["editor", "code", "markdown", "html", "preview"],
+  defaultSize: { w: 1120, h: 720 },
   mount(container, ctx) {
     const el = document.createElement("div");
-    el.className = "app code-app";
-    el.innerHTML = `
-      <div class="app-toolbar">
-        <button class="btn" id="ce-open">📂 Open…</button>
-        <button class="btn primary" id="ce-save">💾 Save</button>
-        <button class="btn ghost" id="ce-new">＋ New</button>
-        <span class="ce-status" id="ce-status">Untitled</span>
-        <span class="ce-spacer"></span>
-        <select class="select" id="ce-lang" style="width:120px">
-          <option value="js">JavaScript</option>
-          <option value="md">Markdown</option>
-          <option value="json">JSON</option>
-          <option value="html">HTML</option>
-          <option value="css">CSS</option>
-          <option value="txt">Plain</option>
-        </select>
-      </div>
-      <div class="code-body">
-        <pre class="code-gutter" id="ce-gutter"><span>1</span></pre>
-        <div class="code-edit">
-          <pre class="code-hl" id="ce-hl"><code></code></pre>
-          <textarea id="ce-area" class="code-area" spellcheck="false" autocorrect="off" autocapitalize="off" wrap="off"></textarea>
-        </div>
-      </div>
-      <div class="code-foot">
-        <span id="ce-pos">Ln 1, Col 1</span>
-        <span id="ce-len">0 chars</span>
-      </div>
-    `;
-    container.appendChild(el);
-
-    const $area = el.querySelector("#ce-area");
-    const $hl = el.querySelector("#ce-hl code");
-    const $gutter = el.querySelector("#ce-gutter");
-    const $status = el.querySelector("#ce-status");
-    const $pos = el.querySelector("#ce-pos");
-    const $len = el.querySelector("#ce-len");
-    const $lang = el.querySelector("#ce-lang");
-
-    let currentPath = null;
-    let dirty = false;
-
-    const setStatus = () => { $status.textContent = (currentPath ? basename(currentPath) : "Untitled") + (dirty ? " •" : ""); ctx.setTitle?.("Code — " + (currentPath ? basename(currentPath) : "Untitled")); };
-    const setDirty = (d) => { if (dirty !== d) { dirty = d; setStatus(); } };
-
-    const langFromName = (name) => {
-      const ext = (name.split(".").pop() || "").toLowerCase();
-      if (["js", "ts", "jsx", "tsx"].includes(ext)) return "js";
-      if (ext === "md" || ext === "markdown") return "md";
-      if (ext === "json") return "json";
-      if (ext === "html" || ext === "htm") return "html";
-      if (ext === "css") return "css";
-      return "txt";
-    };
-
-    const update = () => {
-      const text = $area.value;
-      const lang = $lang.value;
-      $hl.innerHTML = highlight(text, lang);
-      const lines = text.split("\n").length;
-      $gutter.innerHTML = Array.from({ length: lines }, (_, i) => `<span>${i + 1}</span>`).join("");
-      $len.textContent = `${text.length} chars`;
-      const pos = $area.selectionStart;
-      const before = text.slice(0, pos);
-      const line = before.split("\n").length;
-      const col = before.length - before.lastIndexOf("\n");
-      $pos.textContent = `Ln ${line}, Col ${col}`;
-    };
-
-    const sync = () => { $hl.parentElement.scrollTop = $area.scrollTop; $hl.parentElement.scrollLeft = $area.scrollLeft; $gutter.scrollTop = $area.scrollTop; };
-
-    $area.addEventListener("input", () => { setDirty(true); update(); });
-    $area.addEventListener("scroll", sync);
-    $area.addEventListener("keyup", update);
-    $area.addEventListener("click", update);
-    $area.addEventListener("keydown", (e) => {
-      if (e.key === "Tab") {
-        e.preventDefault();
-        const start = $area.selectionStart, end = $area.selectionEnd;
-        $area.setRangeText("  ", start, end, "end");
-        update();
+    el.className = "app code-workbench";
+    el.innerHTML = `<div class="app-toolbar"><button class="btn" data-open>Open</button><button class="btn" data-new>New</button><button class="btn primary" data-save>Save</button><button class="btn" data-preview>Preview</button><span class="ce-spacer"></span><span data-status role="status">Loading editor…</span></div><div class="editor-tabs" role="tablist"></div><div class="workbench-body"><aside class="code-tree scroll-thin"></aside><main class="code-mount"></main><iframe class="code-preview" title="Code preview" sandbox="allow-scripts" hidden></iframe></div>`;
+    container.append(el);
+    let cm,
+      view,
+      active = null,
+      tabs = [],
+      disposed = false,
+      showPreview = false;
+    const host = el.querySelector(".code-mount"),
+      frame = el.querySelector("iframe"),
+      status = el.querySelector("[data-status]");
+    const draftKey = (t) => t.path || `untitled:${t.id}`;
+    function stash() {
+      if (!active || !view) return;
+      active.text = view.state.doc.toString();
+      active.state = view.state;
+    }
+    function persistDraft() {
+      if (!active || !view || !active.dirty) return;
+      stash();
+      store.update((s) => {
+        s.drafts[draftKey(active)] = {
+          text: active.text,
+          path: active.path,
+          modifiedAt: Date.now(),
+        };
+      });
+    }
+    function tree() {
+      const out = [];
+      const walk = (node, path) => {
+        for (const child of Object.values(node.children || {})) {
+          const p = path + "/" + child.name;
+          if (child.type === "dir") walk(child, p);
+          else if (!child.binary) out.push(p);
+        }
+      };
+      walk(fs.root, "");
+      el.querySelector(".code-tree").innerHTML =
+        "<h4>WORKSPACE</h4>" +
+        out
+          .map(
+            (p) =>
+              `<button data-file="${escape(p)}" title="${escape(p)}">${escape(basename(p))}<small>${escape(p.split("/").slice(0, -1).join("/"))}</small></button>`,
+          )
+          .join("");
+      el.querySelectorAll("[data-file]").forEach(
+        (b) => (b.onclick = () => open(b.dataset.file)),
+      );
+    }
+    function tabbar() {
+      el.querySelector(".editor-tabs").innerHTML = tabs
+        .map(
+          (t) =>
+            `<button role="tab" aria-selected="${t === active}" data-tab="${t.id}">${escape(t.path ? basename(t.path) : "Untitled")}${t.dirty ? " •" : ""}<span data-close="${t.id}" aria-label="Close tab">×</span></button>`,
+        )
+        .join("");
+      el.querySelectorAll("[data-tab]").forEach(
+        (b) =>
+          (b.onclick = (e) => {
+            const t = tabs.find((t) => t.id === b.dataset.tab);
+            if (e.target.dataset.close) {
+              stash();
+              if (
+                t.dirty &&
+                !confirm(
+                  "Close this tab? Its recovery draft will remain available.",
+                )
+              )
+                return;
+              tabs = tabs.filter((x) => x !== t);
+              if (active === t) {
+                active = null;
+                if (tabs.length) select(tabs.at(-1));
+                else open();
+              }
+              tabbar();
+              ctx.setTitle("Code");
+              return;
+            }
+            select(t);
+          }),
+      );
+    }
+    function stateFor(t) {
+      const ext = t.path?.split(".").pop();
+      const lang =
+        ext === "html"
+          ? cm.html()
+          : ext === "css"
+            ? cm.css()
+            : ext === "json"
+              ? cm.json()
+              : cm.javascript({
+                  typescript: ["ts", "tsx"].includes(ext),
+                  jsx: ["tsx", "jsx"].includes(ext),
+                });
+      return cm.EditorState.create({
+        doc: t.text,
+        extensions: [
+          cm.lineNumbers(),
+          cm.history(),
+          cm.drawSelection(),
+          cm.highlightActiveLine(),
+          cm.bracketMatching(),
+          cm.syntaxHighlighting(cm.defaultHighlightStyle),
+          cm.search(),
+          cm.highlightSelectionMatches(),
+          lang,
+          cm.keymap.of([
+            {
+              key: "Mod-s",
+              run: () => {
+                save();
+                return true;
+              },
+            },
+            cm.indentWithTab,
+            ...cm.defaultKeymap,
+            ...cm.historyKeymap,
+            ...cm.searchKeymap,
+          ]),
+          cm.EditorView.theme(
+            {
+              "&": {
+                height: "100%",
+                fontSize: "13px",
+                background: "var(--bg-0)",
+                color: "var(--text)",
+              },
+              ".cm-scroller": {
+                overflow: "auto",
+                fontFamily: "ui-monospace,monospace",
+              },
+              ".cm-gutters": {
+                background: "var(--bg-1)",
+                color: "var(--text-dim)",
+                border: "none",
+              },
+              ".cm-cursor": { borderLeftColor: "var(--accent)" },
+              ".cm-activeLine": { background: "#80808012" },
+            },
+            { dark: store.get().prefs.theme === "dark" },
+          ),
+          cm.EditorView.updateListener.of((update) => {
+            if (update.docChanged) {
+              t.dirty = true;
+              persistDraft();
+              tabbar();
+              status.textContent = "Recovery draft saved";
+              if (showPreview) preview();
+            }
+          }),
+        ],
+      });
+    }
+    function select(t) {
+      stash();
+      active = t;
+      if (!view)
+        view = new cm.EditorView({
+          state: t.state || stateFor(t),
+          parent: host,
+        });
+      else view.setState(t.state || stateFor(t));
+      tabbar();
+      ctx.setTitle("Code · " + (t.path ? basename(t.path) : "Untitled"));
+      status.textContent = t.dirty ? "Recovery draft" : "Saved";
+      if (showPreview) preview();
+      ctx.checkpoint?.();
+    }
+    function open(path) {
+      if (!cm) {
+        queued.push(path);
+        return;
       }
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
-        e.preventDefault();
-        save();
+      stash();
+      let t = tabs.find((t) => path && t.path === path);
+      if (!t) {
+        const key = path || null,
+          draft = key && store.get().drafts[key],
+          node = path && fs.read(path);
+        t = {
+          id: crypto.randomUUID(),
+          path: path || null,
+          text: draft?.text ?? node?.content ?? "",
+          dirty: !!draft,
+        };
+        tabs.push(t);
       }
+      select(t);
+    }
+    async function save() {
+      if (!active) return;
+      stash();
+      let path = active.path;
+      if (!path) path = await fileDialog({ save: true, name: "Untitled.js" });
+      if (!path) return;
+      try {
+        fs.write(path, active.text, {
+          mime: path.endsWith(".html") ? "text/html" : "text/plain",
+        });
+        const old = draftKey(active);
+        active.path = path;
+        active.dirty = false;
+        store.update((s) => {
+          delete s.drafts[old];
+          delete s.drafts[path];
+        });
+        ctx.checkpoint?.();
+        await store.flush();
+        tabbar();
+        tree();
+        status.textContent = "Saved";
+        ctx.setTitle("Code · " + basename(path));
+      } catch (error) {
+        status.textContent = error.message;
+      }
+    }
+    async function preview() {
+      if (!active || !view) return;
+      const text = view.state.doc.toString(),
+        ext = active.path?.split(".").pop();
+      if (ext === "md" || ext === "markdown") {
+        const { markdown } = await import("../../vendor/markdown.js");
+        frame.srcdoc =
+          `<meta name="color-scheme" content="light dark"><style>body{font:16px/1.7 system-ui;padding:24px;max-width:75ch}pre{overflow:auto}</style>` +
+          markdown(text);
+        return;
+      }
+      const policy =
+        '<meta http-equiv="Content-Security-Policy" content="default-src &apos;none&apos;; script-src &apos;unsafe-inline&apos;; style-src &apos;unsafe-inline&apos;; img-src data: blob:;">';
+      frame.srcdoc =
+        policy +
+        (ext === "html"
+          ? text
+          : ext === "css"
+            ? `<style>${text}</style><main><h1>CSS preview</h1><p>Edit styles to see changes here.</p><button>Example button</button></main>`
+            : `<pre id="output"></pre><script>console.log=(...v)=>document.getElementById('output').textContent+=v.join(' ')+'\\n';try{${text.replace(/<\/script/gi, "<\\/script")}}catch(e){console.log(e.message)}<\/script>`);
+    }
+    el.querySelector("[data-open]").onclick = async () => {
+      const p = await fileDialog({ accept: (p) => !fs.read(p)?.binary });
+      if (p) open(p);
+    };
+    el.querySelector("[data-new]").onclick = () => open();
+    el.querySelector("[data-save]").onclick = save;
+    el.querySelector("[data-preview]").onclick = () => {
+      showPreview = !showPreview;
+      frame.hidden = !showPreview;
+      if (showPreview) preview();
+    };
+    const queued = [];
+    import("../../vendor/editor.js")
+      .then((module) => {
+        if (disposed) return;
+        cm = module;
+        tree();
+        const saved = ctx.opts.tabs || [];
+        if (saved.length) saved.forEach(open);
+        else if (ctx.opts.openFsFile) open(ctx.opts.openFsFile);
+        for (const [key, recovery] of Object.entries(store.get().drafts).filter(
+          ([key]) => key.startsWith("untitled:"),
+        )) {
+          const tab = {
+            id: key.slice(9),
+            path: null,
+            text: recovery.text,
+            dirty: true,
+          };
+          tabs.push(tab);
+          select(tab);
+        }
+        if (!tabs.length) open();
+        queued.splice(0).forEach(open);
+        status.textContent = "Ready · Ctrl F to find";
+      })
+      .catch((error) => {
+        status.textContent = "Editor could not load: " + error.message;
+      });
+    const off = bus.on("fs-change", () => {
+      if (cm) tree();
     });
-    $lang.addEventListener("change", update);
-
-    const open = (path) => {
-      const node = fs.read(path);
-      if (!node) return;
-      currentPath = path;
-      $area.value = node.content || "";
-      $lang.value = langFromName(path);
-      dirty = false;
-      setStatus();
-      update();
+    return {
+      onOpen(opts) {
+        if (opts.openFsFile) open(opts.openFsFile);
+      },
+      session() {
+        stash();
+        return { tabs: tabs.map((t) => t.path).filter(Boolean) };
+      },
+      beforeClose() {
+        persistDraft();
+        return true;
+      },
+      unmount() {
+        disposed = true;
+        persistDraft();
+        view?.destroy();
+        off();
+        el.remove();
+      },
     };
-
-    const save = () => {
-      if (!currentPath) {
-        const name = prompt("Save as (full path or filename):", `Untitled.${$lang.value}`);
-        if (!name) return;
-        currentPath = name.startsWith("/") ? name : joinPath("/Documents", name);
-        if (fs.exists(currentPath) && !confirm(`Overwrite ${currentPath}?`)) { currentPath = null; return; }
-      }
-      fs.write(currentPath, $area.value, { mime: mimeFor($lang.value) });
-      setDirty(false);
-      setStatus();
-      bus.emit("notify", { title: "Saved", body: currentPath });
-    };
-
-    el.querySelector("#ce-open").addEventListener("click", () => openDialog().then((p) => p && open(p)));
-    el.querySelector("#ce-save").addEventListener("click", save);
-    el.querySelector("#ce-new").addEventListener("click", () => {
-      if (dirty && !confirm("Discard unsaved changes?")) return;
-      currentPath = null; $area.value = ""; dirty = false; setStatus(); update();
-    });
-
-    // Initial load
-    if (ctx.opts?.openFsFile && fs.exists(ctx.opts.openFsFile)) open(ctx.opts.openFsFile);
-    else { $area.value = "// Welcome to Code\n// Use the toolbar to open or create files in the file system.\n\nconst greet = (name) => `Hello, ${name}!`;\nconsole.log(greet('NovaOS'));\n"; setStatus(); update(); }
-
-    const onFsOpen = bus.on("code-open-file", ({ path }) => open(path));
-
-    return { unmount() { onFsOpen?.(); el.remove(); } };
   },
 };
-
-function mimeFor(lang) {
-  return { js: "application/javascript", md: "text/markdown", json: "application/json", html: "text/html", css: "text/css", txt: "text/plain" }[lang] || "text/plain";
-}
-
-function openDialog() {
-  return new Promise((resolve) => {
-    const root = document.createElement("div");
-    root.className = "dialog-backdrop";
-    root.innerHTML = `
-      <div class="dialog">
-        <h3>Open file</h3>
-        <p>Enter the path of a file to open.</p>
-        <input class="input" id="op-path" value="/Projects/hello.js" />
-        <div class="row">
-          <button class="btn" data-act="cancel">Cancel</button>
-          <button class="btn primary" data-act="ok">Open</button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(root);
-    const input = root.querySelector("#op-path");
-    setTimeout(() => input.focus(), 20);
-    const cleanup = (v) => { root.remove(); resolve(v); };
-    root.querySelector('[data-act="cancel"]').addEventListener("click", () => cleanup(null));
-    root.querySelector('[data-act="ok"]').addEventListener("click", () => cleanup(input.value));
-    input.addEventListener("keydown", (e) => { if (e.key === "Enter") cleanup(input.value); if (e.key === "Escape") cleanup(null); });
-  });
-}
-
-/* Minimal syntax highlighter — token-based, escapes HTML safely. */
-function highlight(src, lang) {
-  if (lang === "txt") return escape(src) + "\n";
-  const rules = LANG_RULES[lang] || [];
-  const tokens = tokenize(src, rules);
-  return tokens.map((t) => t.type
-    ? `<span class="tok-${t.type}">${escape(t.text)}</span>`
-    : escape(t.text)
-  ).join("") + "\n";
-}
-
-const COMMON_KEYWORDS = "var|let|const|function|return|if|else|for|while|do|switch|case|break|continue|new|class|extends|super|this|null|undefined|true|false|typeof|instanceof|in|of|try|catch|finally|throw|async|await|yield|import|from|export|default|static";
-const LANG_RULES = {
-  js: [
-    { type: "comment", re: /^\/\/[^\n]*/ },
-    { type: "comment", re: /^\/\*[\s\S]*?\*\// },
-    { type: "string", re: /^"(?:\\.|[^"\\])*"/ },
-    { type: "string", re: /^'(?:\\.|[^'\\])*'/ },
-    { type: "string", re: /^`(?:\\.|[^`\\])*`/ },
-    { type: "number", re: /^-?\b\d+(?:\.\d+)?\b/ },
-    { type: "kw", re: new RegExp("^\\b(" + COMMON_KEYWORDS + ")\\b") },
-    { type: "ident", re: /^[A-Za-z_$][\w$]*/ },
-    { type: "punct", re: /^[{}()[\];,.]/ },
-    { type: "op", re: /^[+\-*/%=<>!?&|^~:]+/ },
-  ],
-  json: [
-    { type: "string", re: /^"(?:\\.|[^"\\])*"/ },
-    { type: "number", re: /^-?\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b/ },
-    { type: "kw", re: /^\b(true|false|null)\b/ },
-    { type: "punct", re: /^[{}\[\],:]/ },
-  ],
-  html: [
-    { type: "comment", re: /^<!--[\s\S]*?-->/ },
-    { type: "tag", re: /^<\/?[A-Za-z][\w-]*/ },
-    { type: "string", re: /^"(?:\\.|[^"\\])*"/ },
-    { type: "string", re: /^'(?:\\.|[^'\\])*'/ },
-    { type: "ident", re: /^[A-Za-z_-][\w-]*/ },
-    { type: "punct", re: /^[<>/=]/ },
-  ],
-  css: [
-    { type: "comment", re: /^\/\*[\s\S]*?\*\// },
-    { type: "string", re: /^"(?:\\.|[^"\\])*"/ },
-    { type: "string", re: /^'(?:\\.|[^'\\])*'/ },
-    { type: "number", re: /^-?\d+(?:\.\d+)?(?:px|em|rem|%|vh|vw|s|ms|deg)?\b/ },
-    { type: "kw", re: /^[a-zA-Z-]+(?=\s*:)/ },
-    { type: "ident", re: /^[A-Za-z_-][\w-]*/ },
-    { type: "punct", re: /^[{}();,:]/ },
-  ],
-  md: [
-    { type: "kw", re: /^#{1,6}\s[^\n]+/ },
-    { type: "string", re: /^`[^`\n]*`/ },
-    { type: "comment", re: /^>\s[^\n]+/ },
-    { type: "tag", re: /^\*\*[^*]+\*\*/ },
-    { type: "ident", re: /^[A-Za-z0-9_]+/ },
-  ],
-};
-
-function tokenize(src, rules) {
-  const out = [];
-  let i = 0;
-  while (i < src.length) {
-    if (src[i] === "\n" || src[i] === " " || src[i] === "\t") {
-      const m = src.slice(i).match(/^[\s]+/);
-      out.push({ type: null, text: m[0] });
-      i += m[0].length; continue;
-    }
-    let matched = false;
-    for (const r of rules) {
-      const m = src.slice(i).match(r.re);
-      if (m) {
-        out.push({ type: r.type, text: m[0] });
-        i += m[0].length;
-        matched = true;
-        break;
-      }
-    }
-    if (!matched) {
-      out.push({ type: null, text: src[i] });
-      i++;
-    }
-  }
-  return out;
-}
-
-function escape(s) { return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }

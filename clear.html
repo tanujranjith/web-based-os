@@ -1,73 +1,174 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <meta http-equiv="Pragma" content="no-cache" />
-  <meta http-equiv="Expires" content="0" />
-  <title>NovaOS — Recovery</title>
-  <style>
-    html, body { margin: 0; height: 100%; background: #0b0d12; color: #e9ecf3; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-    body { display: grid; place-items: center; padding: 20px; }
-    .card {
-      max-width: 520px; padding: 24px 28px;
-      background: rgba(255,255,255,0.04);
-      border: 1px solid rgba(255,255,255,0.10);
-      border-radius: 14px;
-      box-shadow: 0 24px 60px -20px rgba(0,0,0,0.6);
-    }
-    h1 { margin: 0 0 6px; font-size: 18px; }
-    p { color: #a6abb8; font-size: 14px; line-height: 1.5; }
-    pre { background: rgba(0,0,0,0.4); padding: 10px 12px; border-radius: 8px; font-size: 12px; overflow: auto; color: #d6dcef; max-height: 240px; white-space: pre-wrap; word-break: break-word; }
-    button { display:inline-flex; align-items:center; gap:6px; margin-top: 8px; padding: 10px 14px; border-radius: 10px; background: #5b8def; color: white; border: 0; cursor: pointer; font-weight: 600; font-size: 14px; }
-    button:hover { background: #3a6ee0; }
-    button.ghost { background: transparent; color: #a6abb8; border: 1px solid rgba(255,255,255,0.12); }
-    .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
-    .ok { color: #6ddf8a; }
-    .err { color: #ff8a8a; }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <h1>NovaOS — Recovery</h1>
-    <p>This page unregisters any stuck service worker and clears all caches so NovaOS can load fresh code. It does <strong>not</strong> touch your data (notes, files, settings).</p>
-    <div class="row">
-      <button id="fix">Unregister SW &amp; clear caches</button>
-      <button class="ghost" id="hard">Also wipe localStorage</button>
-      <button class="ghost" id="open">Open NovaOS</button>
-    </div>
-    <pre id="log">Ready.</pre>
-  </div>
-  <script>
-    const log = document.getElementById("log");
-    function line(msg, cls) { log.innerHTML += "\n" + (cls ? '<span class="' + cls + '">' + msg + '</span>' : msg); }
-
-    async function recover(wipeStorage) {
-      log.textContent = "";
-      line("Starting recovery…");
-      try {
-        if ("serviceWorker" in navigator) {
-          const regs = await navigator.serviceWorker.getRegistrations();
-          line("Found " + regs.length + " service worker(s).");
-          for (const r of regs) { await r.unregister(); line("• unregistered " + (r.scope || "?"), "ok"); }
-        } else line("Service workers not supported here.");
-      } catch (e) { line("SW unregister failed: " + e.message, "err"); }
-      try {
-        if (window.caches) {
-          const keys = await caches.keys();
-          line("Found " + keys.length + " cache(s).");
-          for (const k of keys) { await caches.delete(k); line("• deleted " + k, "ok"); }
-        }
-      } catch (e) { line("Cache clear failed: " + e.message, "err"); }
-      if (wipeStorage) {
-        try { localStorage.clear(); line("• localStorage cleared", "ok"); } catch (e) { line("localStorage clear failed: " + e.message, "err"); }
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Cache-Control"
+      content="no-cache, no-store, must-revalidate"
+    />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <title>NovaOS — Recovery</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #0b0d12;
+        color: #e9ecf3;
+        font-family:
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          Roboto,
+          sans-serif;
       }
-      line("Done. Click \"Open NovaOS\" to launch with fresh code.", "ok");
-    }
+      body {
+        display: grid;
+        place-items: center;
+        padding: 20px;
+      }
+      .card {
+        max-width: 520px;
+        padding: 24px 28px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 14px;
+        box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.6);
+      }
+      h1 {
+        margin: 0 0 6px;
+        font-size: 18px;
+      }
+      p {
+        color: #a6abb8;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      pre {
+        background: rgba(0, 0, 0, 0.4);
+        padding: 10px 12px;
+        border-radius: 8px;
+        font-size: 12px;
+        overflow: auto;
+        color: #d6dcef;
+        max-height: 240px;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      button {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 8px;
+        padding: 10px 14px;
+        border-radius: 10px;
+        background: #5b8def;
+        color: white;
+        border: 0;
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 14px;
+      }
+      button:hover {
+        background: #3a6ee0;
+      }
+      button.ghost {
+        background: transparent;
+        color: #a6abb8;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 12px;
+      }
+      .ok {
+        color: #6ddf8a;
+      }
+      .err {
+        color: #ff8a8a;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>NovaOS — Recovery</h1>
+      <p>
+        This page unregisters any stuck service worker and clears all caches so
+        NovaOS can load fresh code. It does <strong>not</strong> touch your data
+        (notes, files, settings).
+      </p>
+      <div class="row">
+        <button id="fix">Unregister SW &amp; clear caches</button>
+        <button class="ghost" id="hard">Also wipe localStorage</button>
+        <button class="ghost" id="open">Open NovaOS</button>
+      </div>
+      <pre id="log">Ready.</pre>
+    </div>
+    <script>
+      const log = document.getElementById("log");
+      function line(msg, cls) {
+        log.innerHTML +=
+          "\n" + (cls ? '<span class="' + cls + '">' + msg + "</span>" : msg);
+      }
 
-    document.getElementById("fix").addEventListener("click", () => recover(false));
-    document.getElementById("hard").addEventListener("click", () => { if (confirm("Wipe all NovaOS data (notes, files, settings)?")) recover(true); });
-    document.getElementById("open").addEventListener("click", () => { location.href = "./"; });
-  </script>
-</body>
+      async function recover(wipeStorage) {
+        log.textContent = "";
+        line("Starting recovery…");
+        try {
+          if ("serviceWorker" in navigator) {
+            const regs = await navigator.serviceWorker.getRegistrations();
+            line("Found " + regs.length + " service worker(s).");
+            for (const r of regs) {
+              await r.unregister();
+              line("• unregistered " + (r.scope || "?"), "ok");
+            }
+          } else line("Service workers not supported here.");
+        } catch (e) {
+          line("SW unregister failed: " + e.message, "err");
+        }
+        try {
+          if (window.caches) {
+            const keys = await caches.keys();
+            line("Found " + keys.length + " cache(s).");
+            for (const k of keys) {
+              await caches.delete(k);
+              line("• deleted " + k, "ok");
+            }
+          }
+        } catch (e) {
+          line("Cache clear failed: " + e.message, "err");
+        }
+        if (wipeStorage) {
+          try {
+            await new Promise((resolve, reject) => {
+              const request = indexedDB.deleteDatabase("novaos-4");
+              request.onsuccess = resolve;
+              request.onerror = () => reject(request.error);
+              request.onblocked = () =>
+                reject(new Error("Close other NovaOS tabs first."));
+            });
+            localStorage.clear();
+            line("• localStorage cleared", "ok");
+          } catch (e) {
+            line("localStorage clear failed: " + e.message, "err");
+          }
+        }
+        line('Done. Click "Open NovaOS" to launch with fresh code.', "ok");
+      }
+
+      document
+        .getElementById("fix")
+        .addEventListener("click", () => recover(false));
+      document.getElementById("hard").addEventListener("click", () => {
+        if (confirm("Wipe all NovaOS data (notes, files, settings)?"))
+          recover(true);
+      });
+      document.getElementById("open").addEventListener("click", () => {
+        location.href = "./";
+      });
+    </script>
+  </body>
 </html>

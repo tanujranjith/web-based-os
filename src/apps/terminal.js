@@ -1,9 +1,15 @@
-import { fs, joinPath, dirname, basename, splitPath } from "../core/filesystem.js";
+import {
+  fs,
+  joinPath,
+  dirname,
+  basename,
+  splitPath,
+} from "../core/filesystem.js";
 import { store } from "../core/state.js";
 import { manager } from "../core/window-manager.js";
 import { registry } from "../core/app-registry.js";
 
-const VERSION = "3.0.0 · Orbit";
+const VERSION = "4.0.0";
 
 export default {
   id: "terminal",
@@ -21,7 +27,7 @@ export default {
 
     const $screen = el.querySelector("#screen");
     let cwd = "/";
-    const history = [];
+    const history = [...(store.get().terminalHistory || [])];
     let hIdx = -1;
 
     const writeLine = (html, cls = "") => {
@@ -32,7 +38,8 @@ export default {
       $screen.scrollTop = $screen.scrollHeight;
     };
 
-    const promptText = () => `<span class="prompt-prefix">${store.get().user.name}@nova</span><span class="ansi-dim">:${escape(cwd)}$</span>`;
+    const promptText = () =>
+      `<span class="prompt-prefix">${escape(store.get().user.name)}@nova</span><span class="ansi-dim">:${escape(cwd)}$</span>`;
 
     const newPrompt = () => {
       const row = document.createElement("div");
@@ -49,17 +56,27 @@ export default {
           // freeze prompt to plain output
           row.innerHTML = `${promptText()} <span>${escape(value)}</span>`;
           if (value.trim()) {
-            history.push(value); hIdx = history.length;
+            history.push(value);
+            hIdx = history.length;
+            store.update((s) => (s.terminalHistory = history.slice(-100)));
             run(value);
           }
           newPrompt();
         } else if (e.key === "ArrowUp") {
           e.preventDefault();
-          if (hIdx > 0) { hIdx--; input.value = history[hIdx]; }
+          if (hIdx > 0) {
+            hIdx--;
+            input.value = history[hIdx];
+          }
         } else if (e.key === "ArrowDown") {
           e.preventDefault();
-          if (hIdx < history.length - 1) { hIdx++; input.value = history[hIdx]; }
-          else { hIdx = history.length; input.value = ""; }
+          if (hIdx < history.length - 1) {
+            hIdx++;
+            input.value = history[hIdx];
+          } else {
+            hIdx = history.length;
+            input.value = "";
+          }
         } else if (e.key === "Tab") {
           e.preventDefault();
           autocomplete(input);
@@ -75,19 +92,27 @@ export default {
     const autocomplete = (input) => {
       const parts = input.value.split(" ");
       const last = parts[parts.length - 1];
-      const dir = last.startsWith("/") ? dirname(last) : (last.includes("/") ? resolvePath(dirname(last)) : cwd);
+      const dir = last.startsWith("/")
+        ? dirname(last)
+        : last.includes("/")
+          ? resolvePath(dirname(last))
+          : cwd;
       const prefix = basename(last);
       const entries = fs.ls(dir) || [];
       const matches = entries.filter((e) => e.name.startsWith(prefix));
       if (matches.length === 1) {
-        const completed = (matches[0].type === "dir" ? matches[0].name + "/" : matches[0].name);
-        parts[parts.length - 1] = (last.includes("/") ? dirname(last) + "/" : "") + completed;
+        const completed =
+          matches[0].type === "dir" ? matches[0].name + "/" : matches[0].name;
+        parts[parts.length - 1] =
+          (last.includes("/") ? dirname(last) + "/" : "") + completed;
         input.value = parts.join(" ");
       } else if (matches.length > 1) {
         const promptLine = input.closest(".prompt-line");
         const div = document.createElement("div");
         div.className = "line ansi-dim";
-        div.innerHTML = matches.map((m) => escape(m.name) + (m.type === "dir" ? "/" : "")).join("  ");
+        div.innerHTML = matches
+          .map((m) => escape(m.name) + (m.type === "dir" ? "/" : ""))
+          .join("  ");
         promptLine.insertAdjacentElement("beforebegin", div);
         $screen.scrollTop = $screen.scrollHeight;
       }
@@ -111,61 +136,103 @@ export default {
 
     const commands = {
       help: () => {
-        writeLine([
-          "Available commands:",
-          "  help              Show this help",
-          "  clear             Clear screen",
-          "  ls [path]         List directory contents",
-          "  cd <path>         Change directory",
-          "  pwd               Print working directory",
-          "  mkdir <name>      Create directory",
-          "  touch <name>      Create empty file (or update mtime)",
-          "  cat <file>        Print file content",
-          "  echo <text>       Print text   (use > file to write)",
-          "  rm <path>         Remove file or folder",
-          "  mv <src> <dst>    Rename / move",
-          "  open <app>        Open an app  (try: notes, files, browser…)",
-          "  apps              List available apps",
-          "  date              Print current date/time",
-          "  whoami            Print current user",
-          "  sysinfo / neofetch  System info",
-          "  history           Command history",
-          "  reset             Reset NovaOS (clears storage)",
-        ].join("\n"));
+        writeLine(
+          [
+            "Available commands:",
+            "  cp <src> <dst>    Copy a file or folder",
+            "  mv <src> <dst>    Move a file or folder",
+            "  find <text>       Search filenames below current folder",
+            "  trash / restore N List or recover deleted files",
+            "  history           Show saved command history",
+            "  help              Show this help",
+            "  clear             Clear screen",
+            "  ls [path]         List directory contents",
+            "  cd <path>         Change directory",
+            "  pwd               Print working directory",
+            "  mkdir <name>      Create directory",
+            "  touch <name>      Create empty file (or update mtime)",
+            "  cat <file>        Print file content",
+            "  echo <text>       Print text   (use > file to write)",
+            "  rm <path>         Remove file or folder",
+            "  mv <src> <dst>    Rename / move",
+            "  open <app>        Open an app  (try: notes, files, browser…)",
+            "  apps              List available apps",
+            "  date              Print current date/time",
+            "  whoami            Print current user",
+            "  sysinfo / neofetch  System info",
+            "  history           Command history",
+            "  reset             Reset NovaOS (clears storage)",
+          ].join("\n"),
+        );
       },
-      clear: () => { $screen.innerHTML = ""; },
+      clear: () => {
+        $screen.innerHTML = "";
+      },
       pwd: () => writeLine(cwd),
       whoami: () => writeLine(store.get().user.name),
       date: () => writeLine(new Date().toString()),
-      history: () => writeLine(history.map((h, i) => `  ${i + 1}  ${escape(h)}`).join("\n")),
-      apps: () => writeLine(registry.all().map((a) => `  ${a.id.padEnd(12)} ${a.name}`).join("\n")),
+      history: () =>
+        writeLine(history.map((h, i) => `  ${i + 1}  ${escape(h)}`).join("\n")),
+      apps: () =>
+        writeLine(
+          registry
+            .all()
+            .map((a) => `  ${a.id.padEnd(12)} ${a.name}`)
+            .join("\n"),
+        ),
       ls: (args) => {
         const target = resolvePath(args[0] || cwd);
         const list = fs.ls(target);
-        if (!list) return writeLine(`ls: no such directory: ${escape(args[0] || target)}`, "ansi-err");
+        if (!list)
+          return writeLine(
+            `ls: no such directory: ${escape(args[0] || target)}`,
+            "ansi-err",
+          );
         if (!list.length) return;
-        writeLine(list.map((e) => e.type === "dir"
-          ? `<span class="ansi-acc">${escape(e.name)}/</span>`
-          : escape(e.name)).join("   "));
+        writeLine(
+          list
+            .map((e) =>
+              e.type === "dir"
+                ? `<span class="ansi-acc">${escape(e.name)}/</span>`
+                : escape(e.name),
+            )
+            .join("   "),
+        );
       },
       cd: (args) => {
-        if (!args[0]) { cwd = "/"; return; }
+        if (!args[0]) {
+          cwd = "/";
+          return;
+        }
         const p = resolvePath(args[0]);
-        if (!fs.isDir(p)) return writeLine(`cd: not a directory: ${escape(args[0])}`, "ansi-err");
+        if (!fs.isDir(p))
+          return writeLine(
+            `cd: not a directory: ${escape(args[0])}`,
+            "ansi-err",
+          );
         cwd = p;
       },
       mkdir: (args) => {
         if (!args[0]) return writeLine("mkdir: missing operand", "ansi-err");
-        try { fs.mkdir(resolvePath(args[0])); } catch (e) { writeLine(`mkdir: ${e.message}`, "ansi-err"); }
+        try {
+          fs.mkdir(resolvePath(args[0]));
+        } catch (e) {
+          writeLine(`mkdir: ${e.message}`, "ansi-err");
+        }
       },
       touch: (args) => {
         if (!args[0]) return writeLine("touch: missing operand", "ansi-err");
-        try { fs.touch(resolvePath(args[0])); } catch (e) { writeLine(`touch: ${e.message}`, "ansi-err"); }
+        try {
+          fs.touch(resolvePath(args[0]));
+        } catch (e) {
+          writeLine(`touch: ${e.message}`, "ansi-err");
+        }
       },
       cat: (args) => {
         if (!args[0]) return writeLine("cat: missing operand", "ansi-err");
         const node = fs.read(resolvePath(args[0]));
-        if (!node) return writeLine(`cat: no such file: ${escape(args[0])}`, "ansi-err");
+        if (!node)
+          return writeLine(`cat: no such file: ${escape(args[0])}`, "ansi-err");
         writeLine(escape(node.content || ""));
       },
       echo: (args, raw) => {
@@ -180,29 +247,65 @@ export default {
       },
       rm: (args) => {
         if (!args[0]) return writeLine("rm: missing operand", "ansi-err");
-        try { fs.remove(resolvePath(args[0])); } catch (e) { writeLine(`rm: ${e.message}`, "ansi-err"); }
+        try {
+          fs.remove(resolvePath(args[0]));
+        } catch (e) {
+          writeLine(`rm: ${e.message}`, "ansi-err");
+        }
+      },
+      cp: (args) => {
+        if (args.length < 2) throw new Error("Usage: cp source destination");
+        const source = resolvePath(args[0]);
+        let dest = resolvePath(args[1]);
+        if (fs.isDir(dest)) dest = joinPath(dest, basename(source));
+        fs.copy(source, dest);
       },
       mv: (args) => {
-        if (args.length < 2) return writeLine("mv: usage: mv <src> <dst>", "ansi-err");
-        const src = resolvePath(args[0]);
-        if (!fs.exists(src)) return writeLine(`mv: source not found: ${escape(args[0])}`, "ansi-err");
-        const dst = args[1];
-        const dstParent = dst.includes("/") ? resolvePath(dirname(dst)) : cwd;
-        if (!fs.isDir(dstParent)) return writeLine(`mv: target dir not found`, "ansi-err");
-        try { fs.rename(src, basename(dst)); }
-        catch (e) { writeLine(`mv: ${e.message}`, "ansi-err"); }
+        if (args.length < 2) throw new Error("Usage: mv source destination");
+        const source = resolvePath(args[0]);
+        let dest = resolvePath(args[1]);
+        if (fs.isDir(dest)) dest = joinPath(dest, basename(source));
+        fs.copy(source, dest, true);
+      },
+      history: () =>
+        history.forEach((line, i) => writeLine(`${i + 1}  ${escape(line)}`)),
+      find: (args) => {
+        const query = (args[0] || "").toLowerCase();
+        const walk = (path) => {
+          for (const entry of fs.ls(path) || []) {
+            if (entry.name.toLowerCase().includes(query))
+              writeLine(escape(entry.path));
+            if (entry.type === "dir") walk(entry.path);
+          }
+        };
+        walk(cwd);
+      },
+      trash: () =>
+        store
+          .get()
+          .trash.forEach((item, i) =>
+            writeLine(`${i + 1}  ${escape(item.path)}`),
+          ),
+      restore: (args) => {
+        const item = store.get().trash[Number(args[0]) - 1];
+        if (!item) throw new Error("Usage: restore <trash number>");
+        fs.restoreTrash(item.id);
       },
       open: (args) => {
         if (!args[0]) return writeLine("open: missing app id", "ansi-err");
         const id = args[0];
-        if (!registry.get(id)) return writeLine(`open: unknown app: ${escape(id)}`, "ansi-err");
+        if (!registry.get(id))
+          return writeLine(`open: unknown app: ${escape(id)}`, "ansi-err");
         manager.open(id);
         writeLine(`Opened ${escape(id)}.`, "ansi-dim");
       },
       sysinfo: () => writeLine(neofetch(), "ansi-acc"),
       neofetch: () => writeLine(neofetch(), "ansi-acc"),
       reset: () => {
-        if (confirm("Reset all NovaOS data?")) { store.reset(); location.reload(); }
+        if (confirm("Reset all NovaOS data?")) {
+          store.reset();
+          store.flush().then(() => location.reload());
+        }
       },
     };
 
@@ -213,17 +316,27 @@ export default {
       const args = parts.map((p) => p.replace(/^"|"$/g, ""));
       if (!cmd) return;
       const fn = commands[cmd];
-      if (!fn) return writeLine(`command not found: ${escape(cmd)}`, "ansi-err");
-      try { fn(args, raw); } catch (e) { writeLine(String(e.message), "ansi-err"); }
+      if (!fn)
+        return writeLine(`command not found: ${escape(cmd)}`, "ansi-err");
+      try {
+        fn(args, raw);
+      } catch (e) {
+        writeLine(escape(String(e.message)), "ansi-err");
+      }
     };
 
     // Banner
     writeLine(banner(), "ansi-acc");
-    writeLine("Type <span class='ansi-ok'>help</span> for available commands.", "ansi-dim");
+    writeLine(
+      "Type <span class='ansi-ok'>help</span> for available commands.",
+      "ansi-dim",
+    );
     newPrompt();
 
     return {
-      unmount() { el.remove(); },
+      unmount() {
+        el.remove();
+      },
     };
   },
 };
@@ -244,7 +357,10 @@ function neofetch() {
   const ua = navigator.userAgent;
   const screen = `${window.innerWidth}×${window.innerHeight}`;
   let storageUsed = "?";
-  try { storageUsed = (new Blob([JSON.stringify(store.get())]).size / 1024).toFixed(1) + " KB"; } catch {}
+  try {
+    storageUsed =
+      (new Blob([JSON.stringify(store.get())]).size / 1024).toFixed(1) + " KB";
+  } catch {}
   return [
     `       /\\         OS:        NovaOS ${VERSION}`,
     `      /  \\        Kernel:    Browser ECMAScript`,
@@ -259,4 +375,12 @@ function neofetch() {
   ].join("\n");
 }
 
-function escape(s) { return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+function escape(s) {
+  return String(s).replace(
+    /[&<>"']/g,
+    (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        c
+      ],
+  );
+}
